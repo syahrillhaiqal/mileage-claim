@@ -11,6 +11,15 @@ export interface Staff {
   staff_email: string;
   position: string;
   dept_id: string;
+  staff_password?: string; // Stored as a hashed string in APEX
+}
+
+export interface Accountant {
+  acc_id: string;
+  acc_name: string;
+  acc_email: string;
+  acc_phone: string;
+  acc_password?: string; // Stored as a hashed string in APEX
 }
 
 export interface MileageClaim {
@@ -38,13 +47,6 @@ export interface TripPassenger {
   staff_id: string;
 }
 
-export interface Accountant {
-  acc_id: string;
-  acc_name: string;
-  acc_email: string;
-  acc_phone: string;
-}
-
 export interface Approval {
   approval_id: string;
   approval_date: string;
@@ -61,11 +63,18 @@ export interface Payment {
   approval_id: string;
 }
 
-// Extra types for UI aggregation
 export interface FullClaim extends MileageClaim {
   staff: Staff;
   trips: Trip[];
   total_amount: number;
   approval?: Approval;
   payment?: Payment;
+}
+
+export interface UserSession {
+  id: string;
+  name: string;
+  email: string;
+  role: 'STAFF' | 'ACCOUNTANT';
+  positionOrTitle: string;
 }
