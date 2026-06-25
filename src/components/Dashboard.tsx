@@ -7,11 +7,12 @@ import { Car, CheckCircle2, Clock, DollarSign, Plus } from 'lucide-react';
 interface DashboardProps {
   userRole: 'STAFF' | 'ACCOUNTANT';
   claims: FullClaim[];
+  currentStaffName : string;
   onAddClaimClick: () => void;
 }
 
-export default function Dashboard({ userRole, claims, onAddClaimClick }: DashboardProps) {
-  const relevantClaims = userRole === 'STAFF' ? claims.filter(c => c.staff_id === 'S001') : claims;
+export default function Dashboard({ userRole, claims, currentStaffName, onAddClaimClick }: DashboardProps) {
+  const relevantClaims = claims;
   
   const totalAmount = relevantClaims.reduce((sum, c) => sum + c.total_amount, 0);
   const pendingCount = relevantClaims.filter(c => c.claim_status === 'PENDING').length;
@@ -32,13 +33,39 @@ export default function Dashboard({ userRole, claims, onAddClaimClick }: Dashboa
     amount: parseFloat(monthlyDataMap[key].toFixed(2))
   }));
 
+  // --- TREND CALCULATION LOGIC ---
+  const currentDate = new Date();
+  const currentMonthKey = format(currentDate, 'MMM yy');
+  
+  const prevDate = new Date();
+  prevDate.setMonth(prevDate.getMonth() - 1);
+  const prevMonthKey = format(prevDate, 'MMM yy');
+
+  const currentMonthTotal = monthlyDataMap[currentMonthKey] || 0;
+  const prevMonthTotal = monthlyDataMap[prevMonthKey] || 0;
+
+  let trendText = "No prior data";
+  let isTrendUp = true;
+
+  if (prevMonthTotal > 0) {
+    const percentChange = ((currentMonthTotal - prevMonthTotal) / prevMonthTotal) * 100;
+    isTrendUp = percentChange >= 0;
+    // Format to 1 decimal place, add a '+' if it's positive
+    trendText = `${isTrendUp ? '+' : ''}${percentChange.toFixed(1)}% from last month`;
+  } else if (currentMonthTotal > 0 && prevMonthTotal === 0) {
+    // If they had 0 claims last month but have some this month
+    trendText = "+100% from last month"; 
+    isTrendUp = true;
+  }
+  // -------------------------------
+
   return (
     <div className="flex flex-col h-full space-y-8">
       {/* Welcome Title */}
       <div className="flex flex-col sm:flex-row sm:items-end justify-between shrink-0 gap-4">
         <div className="flex flex-col">
           <h1 className="text-3xl font-bold text-slate-900">
-            Welcome back, {userRole === 'STAFF' ? 'Ahmad Faizal' : 'Siti Nurhaliza'}
+            Welcome back, {currentStaffName}
           </h1>
           <p className="text-slate-500 mt-1">Review and manage travel expenses.</p>
         </div>
@@ -59,8 +86,8 @@ export default function Dashboard({ userRole, claims, onAddClaimClick }: Dashboa
           title="Total Claimed" 
           value={`RM ${totalAmount.toFixed(2)}`} 
           icon={<DollarSign className="w-6 h-6 text-emerald-600" />} 
-          trend="+12% from last month"
-          trendUp={true}
+          trend={trendText}
+          trendUp={isTrendUp}
         />
         <KpiCard 
           title="Pending Claims" 

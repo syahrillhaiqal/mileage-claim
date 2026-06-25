@@ -30,7 +30,7 @@ export interface MileageClaim {
 }
 
 export interface Trip {
-  trip_id: string;
+  trip_id: number;
   trip_date: string;
   origin: string;
   destination: string;

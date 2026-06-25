@@ -209,6 +209,7 @@ function App() {
                 <Dashboard 
                   userRole={session.role} 
                   claims={session.role === 'STAFF' ? claims.filter(c => c.staff_id === session.id) : claims} 
+                  currentStaffName={session.name}
                   onAddClaimClick={() => setActiveTab('claims')} 
                 />
               )}

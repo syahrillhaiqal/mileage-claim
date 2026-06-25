@@ -60,17 +60,25 @@ export default function Claims({ claims, currentStaffId, onClaimCreated }: Claim
     e.preventDefault();
     setIsSubmitting(true);
     try {
-      const claimId = Math.floor(1000 + Math.random() * 9000);
-      
-      const newClaim: MileageClaim = {
-        claim_id: claimId.toString(),
+      // 1. Prepare the claim payload WITHOUT a claim_id
+      const claimPayload = {
         claim_date: claimDate,
         claim_status: 'PENDING',
         staff_id: currentStaffId
       };
 
-      await DatabaseService.createMileageClaim(newClaim);
+      // 2. Await the creation and capture the database-generated response
+      // (Using 'as MileageClaim' to bypass TypeScript errors if the type requires an ID)
+      const createdClaim = await DatabaseService.createMileageClaim(claimPayload as MileageClaim);
+      
+      // 3. Extract the real ID returned by your Oracle Database
+      const realClaimId = createdClaim.claim_id; 
 
+      if (!realClaimId) {
+         throw new Error("Database did not return a generated claim_id.");
+      }
+
+      // 4. Loop through and create trips using the REAL claim_id
       for (let i = 0; i < trips.length; i++) {
         const t = trips[i];
         const distNum = parseFloat(t.distance) || 0;
@@ -78,8 +86,8 @@ export default function Claims({ claims, currentStaffId, onClaimCreated }: Claim
         const tollNum = parseFloat(t.toll_fee) || 0;
         const amount = calculateTripAmount(distNum, parkNum, tollNum);
 
-        const tripData: Trip = {
-          trip_id: 'T' + Math.floor(10000 + Math.random() * 90000),
+        const tripPayload = {
+          // Omit trip_id, let the database generate it
           trip_date: t.trip_date || claimDate,
           origin: t.origin,
           destination: t.destination,
@@ -88,12 +96,12 @@ export default function Claims({ claims, currentStaffId, onClaimCreated }: Claim
           toll_fee: tollNum,
           mileage_rate: mileageRate,
           trip_amount: amount,
-          claim_id: claimId.toString()
+          claim_id: realClaimId // Use the parent ID we just got back from Oracle!
         };
-        await DatabaseService.createTrip(tripData);
+        await DatabaseService.createTrip(tripPayload as Trip);
       }
 
-      setSuccessMsg(`Mileage claim ${claimId} has been submitted successfully.`);
+      setSuccessMsg(`Mileage claim ${realClaimId} has been submitted successfully.`);
       setIsCreating(false);
       
       // Reset State
@@ -103,14 +111,15 @@ export default function Claims({ claims, currentStaffId, onClaimCreated }: Claim
       setTimeout(() => setSuccessMsg(null), 5000);
     } catch (err) {
       console.error(err);
-      alert("Submission error. Please ensure the ORDS connection parameters are set correctly.");
+      alert("Submission error. Please ensure ORDS is configured to return the generated IDs.");
     } finally {
       setIsSubmitting(false);
     }
   };
 
   const filteredClaims = claims.filter(c => 
-    c.claim_id.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    // c.claim_id.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    c.claim_id ||
     c.claim_status.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
@@ -119,7 +128,7 @@ export default function Claims({ claims, currentStaffId, onClaimCreated }: Claim
       {/* Dynamic Header */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-end gap-4 shrink-0">
         <div className="flex flex-col">
-          <h1 className="text-3xl font-bold text-slate-900">My Travel Logs</h1>
+          <h1 className="text-3xl font-bold text-slate-900">My Trip Logs</h1>
           <p className="text-slate-500 mt-1">Review and manage your expense claims.</p>
         </div>
         <button 
@@ -127,7 +136,7 @@ export default function Claims({ claims, currentStaffId, onClaimCreated }: Claim
           className="flex items-center px-6 py-3 bg-indigo-600 text-white rounded-xl shadow-md shadow-indigo-200 font-semibold hover:bg-indigo-700 transition-all w-fit cursor-pointer"
         >
           <Plus className="w-5 h-5 mr-2" />
-          Add Travel Log
+          Add Trip Log
         </button>
       </div>
 
@@ -272,7 +281,7 @@ export default function Claims({ claims, currentStaffId, onClaimCreated }: Claim
       {isCreating && (
         <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4 z-50 overflow-y-auto">
           <div className="bg-white rounded-3xl shadow-xl max-w-3xl w-full p-8 max-h-[90vh] flex flex-col my-8">
-            <h2 className="text-xl font-bold text-slate-900 mb-4 shrink-0">Create New Travel Claim</h2>
+            <h2 className="text-xl font-bold text-slate-900 mb-4 shrink-0">Create New Claim</h2>
             
             <form onSubmit={handleSubmitClaim} className="flex-1 flex flex-col min-h-0">
               <div className="overflow-y-auto flex-1 pr-2 space-y-6">
