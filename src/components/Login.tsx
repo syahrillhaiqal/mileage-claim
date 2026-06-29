@@ -9,7 +9,6 @@ interface LoginProps {
 }
 
 export default function Login({ onLoginSuccess }: LoginProps) {
-  const [role, setRole] = useState<'STAFF' | 'ACCOUNTANT'>('STAFF');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -22,45 +21,52 @@ export default function Login({ onLoginSuccess }: LoginProps) {
 
     try {
       const inputHash = (await hashPassword(password)).toUpperCase();
+      let authenticatedUser: UserSession | null = null;
 
-      if (role === 'STAFF') {
-        const staffMember = await DatabaseService.getStaffByEmail(email);
-        if (!staffMember) {
-          throw new Error("Invalid credentials or user record not found.");
-        }
-        
-        // Match hashes (assuming field exists in staff payload)
+      // 1. Try to find the user in the Staff table first
+      const staffMember = await DatabaseService.getStaffByEmail(email);
+      
+      if (staffMember) {
         const dbHash = staffMember.staff_password || '';
-        if (inputHash !== dbHash && password !== staffMember.staff_password) {
+        if (inputHash === dbHash || password === staffMember.staff_password) {
+          authenticatedUser = {
+            id: staffMember.staff_id,
+            name: `${staffMember.staff_fname} ${staffMember.staff_lname}`,
+            email: staffMember.staff_email,
+            role: 'STAFF',
+            positionOrTitle: staffMember.position
+          };
+        } else {
           throw new Error("Incorrect password.");
         }
-
-        onLoginSuccess({
-          id: staffMember.staff_id,
-          name: `${staffMember.staff_fname} ${staffMember.staff_lname}`,
-          email: staffMember.staff_email,
-          role: 'STAFF',
-          positionOrTitle: staffMember.position
-        });
-      } else {
+      } 
+      // 2. If not found in Staff, try the Accountant table
+      else {
         const accountant = await DatabaseService.getAccountantByEmail(email);
-        if (!accountant) {
-          throw new Error("Invalid credentials or accountant record not found.");
+        
+        if (accountant) {
+          const dbHash = accountant.acc_password || '';
+          if (inputHash === dbHash || password === accountant.acc_password) {
+            authenticatedUser = {
+              id: accountant.acc_id,
+              name: accountant.acc_name,
+              email: accountant.acc_email,
+              role: 'ACCOUNTANT',
+              positionOrTitle: 'Accountant'
+            };
+          } else {
+            throw new Error("Incorrect password.");
+          }
         }
-
-        const dbHash = accountant.acc_password || '';
-        if (inputHash !== dbHash && password !== accountant.acc_password) {
-          throw new Error("Incorrect password.");
-        }
-
-        onLoginSuccess({
-          id: accountant.acc_id,
-          name: accountant.acc_name,
-          email: accountant.acc_email,
-          role: 'ACCOUNTANT',
-          positionOrTitle: 'Accountant'
-        });
       }
+
+      // Final check
+      if (authenticatedUser) {
+        onLoginSuccess(authenticatedUser);
+      } else {
+        throw new Error("Invalid credentials or user record not found.");
+      }
+
     } catch (err: any) {
       console.error(err);
       setErrorMsg(err.message || "Failed to authenticate with database.");
@@ -70,107 +76,98 @@ export default function Login({ onLoginSuccess }: LoginProps) {
   };
 
   return (
-    <div className="min-h-screen bg-slate-900 flex flex-col justify-center py-12 sm:px-6 lg:px-8 font-sans text-slate-100">
-      <div className="sm:mx-auto sm:w-full sm:max-w-md text-center">
-        <div className="inline-flex w-16 h-16 bg-indigo-600 rounded-2xl items-center justify-center shadow-lg shadow-indigo-500/20 mb-4">
-          <span className="text-white font-extrabold text-3xl">SL</span>
-        </div>
-        <h2 className="text-3xl font-bold tracking-tight text-white">
+    <div className="min-h-screen bg-slate-50 flex flex-col justify-center py-12 sm:px-6 lg:px-8 font-sans relative overflow-hidden">
+      
+      {/* Decorative Background Elements */}
+      <div className="absolute top-[-15%] left-[-10%] w-[500px] h-[500px] bg-orange-400/20 rounded-full blur-[100px] pointer-events-none"></div>
+      <div className="absolute bottom-[-15%] right-[-10%] w-[500px] h-[500px] bg-red-500/15 rounded-full blur-[100px] pointer-events-none"></div>
+
+      <div className="sm:mx-auto sm:w-full sm:max-w-md text-center relative z-10">
+        <img 
+          src="/logo.png" 
+          alt="SL Software Solutions Logo" 
+          className="h-16 w-auto object-contain mx-auto mb-6 drop-shadow-sm" 
+        />
+        <h2 className="text-3xl font-extrabold tracking-tight text-slate-900">
           Mileage Claim System
         </h2>
-        <p className="mt-2 text-sm text-slate-400">
-          SL Software Solutions Sdn Bhd
+        <p className="mt-2 text-sm font-medium text-slate-500">
+          Sign in to manage your claims and approvals
         </p>
       </div>
 
-      <div className="mt-8 sm:mx-auto sm:w-full sm:max-w-md">
-        <div className="bg-slate-800 py-8 px-4 shadow-xl border border-slate-700/50 sm:rounded-3xl sm:px-10">
+      <div className="mt-8 sm:mx-auto sm:w-full sm:max-w-md relative z-10">
+        <div className="bg-white py-8 px-4 shadow-2xl shadow-orange-900/5 border border-orange-100 sm:rounded-3xl sm:px-10">
           
-          {/* Tab Selection */}
-          <div className="flex bg-slate-900 p-1.5 rounded-xl mb-6 border border-slate-700/30">
-            <button
-              type="button"
-              onClick={() => { setRole('STAFF'); setErrorMsg(null); }}
-              className={`flex-1 py-2 text-center text-xs font-bold rounded-lg transition-all ${
-                role === 'STAFF' ? 'bg-indigo-600 text-white shadow-sm' : 'text-slate-400 hover:text-slate-200'
-              }`}
-            >
-              Staff Portal
-            </button>
-            <button
-              type="button"
-              onClick={() => { setRole('ACCOUNTANT'); setErrorMsg(null); }}
-              className={`flex-1 py-2 text-center text-xs font-bold rounded-lg transition-all ${
-                role === 'ACCOUNTANT' ? 'bg-indigo-600 text-white shadow-sm' : 'text-slate-400 hover:text-slate-200'
-              }`}
-            >
-              Accountant
-            </button>
-          </div>
-
           {errorMsg && (
-            <div className="mb-4 bg-rose-500/10 border border-rose-500/20 rounded-xl p-3 text-rose-300 text-xs flex items-start gap-2.5">
-              <ShieldAlert className="w-4 h-4 shrink-0 mt-0.5" />
-              <span>{errorMsg}</span>
+            <div className="mb-6 bg-red-50 border border-red-200 rounded-xl p-3.5 text-red-600 text-sm flex items-start gap-3 shadow-sm">
+              <ShieldAlert className="w-5 h-5 shrink-0 mt-0.5 text-red-500" />
+              <span className="font-medium">{errorMsg}</span>
             </div>
           )}
 
-          <form onSubmit={handleLoginSubmit} className="space-y-5">
+          <form onSubmit={handleLoginSubmit} className="space-y-6">
             <div>
-              <label className="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-1">
+              <label className="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-1.5">
                 Email Address
               </label>
               <div className="relative">
-                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                  <Mail className="h-4 w-4 text-slate-500" />
+                <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
+                  <Mail className="h-4 w-4 text-slate-400" />
                 </div>
                 <input
                   type="email"
                   required
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  className="block w-full pl-10 pr-3 py-2.5 bg-slate-900 border border-slate-700 rounded-xl text-slate-200 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-sm transition-all"
+                  className="block w-full pl-10 pr-4 py-3 bg-white border border-slate-200 rounded-xl text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-4 focus:ring-orange-500/10 focus:border-orange-500 transition-all shadow-sm"
                   placeholder="name@slsoftware.com"
                 />
               </div>
             </div>
 
             <div>
-              <label className="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-1">
+              <label className="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-1.5">
                 Password
               </label>
               <div className="relative">
-                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                  <Lock className="h-4 w-4 text-slate-500" />
+                <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
+                  <Lock className="h-4 w-4 text-slate-400" />
                 </div>
                 <input
                   type="password"
                   required
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  className="block w-full pl-10 pr-3 py-2.5 bg-slate-900 border border-slate-700 rounded-xl text-slate-200 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-sm transition-all"
+                  className="block w-full pl-10 pr-4 py-3 bg-white border border-slate-200 rounded-xl text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-4 focus:ring-orange-500/10 focus:border-orange-500 transition-all shadow-sm"
                   placeholder="••••••••"
                 />
               </div>
             </div>
 
-            <div>
+            <div className="pt-2">
               <button
                 type="submit"
                 disabled={isLoading}
-                className="w-full flex justify-center py-3 px-4 border border-transparent rounded-xl shadow-md text-sm font-bold text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 focus:ring-offset-slate-900 disabled:opacity-50 transition-colors"
+                className="w-full flex justify-center items-center py-3.5 px-4 border border-transparent rounded-xl shadow-lg shadow-orange-500/30 text-sm font-bold text-white bg-gradient-to-r from-orange-500 to-red-600 hover:from-orange-600 hover:to-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-orange-500 disabled:opacity-70 disabled:cursor-not-allowed transition-all"
               >
                 {isLoading ? (
-                  <span className="flex items-center gap-2">
-                    <Loader2 className="w-4 h-4 animate-spin" />
+                  <>
+                    <Loader2 className="w-5 h-5 animate-spin mr-2" />
                     Authenticating...
-                  </span>
+                  </>
                 ) : (
                   'Sign In'
                 )}
               </button>
             </div>
           </form>
+          
+          <div className="mt-8 text-center">
+            <p className="text-xs text-slate-400 font-medium">
+              &copy; {new Date().getFullYear()} SL Software Solutions Sdn Bhd
+            </p>
+          </div>
         </div>
       </div>
     </div>

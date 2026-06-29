@@ -117,10 +117,12 @@ function App() {
       {/* Header */}
       <header className="h-16 bg-white border-b border-slate-200 flex items-center justify-between px-6 shrink-0 z-10">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 bg-indigo-600 rounded-lg flex items-center justify-center">
-            <span className="text-white font-bold text-xl">SL</span>
-          </div>
-          <div className="flex flex-col hidden sm:flex">
+          <img 
+            src="/logo.png" 
+            alt="SL Software Solutions Logo" 
+            className="h-8 w-auto object-contain" 
+          />
+          <div className="flex flex-col hidden sm:flex border-l border-slate-200 pl-3 ml-1">
             <span className="font-bold text-slate-800 leading-none mb-1">SL Software Solutions</span>
             <span className="text-[11px] text-slate-500 uppercase tracking-wider">Mileage Claim System</span>
           </div>
