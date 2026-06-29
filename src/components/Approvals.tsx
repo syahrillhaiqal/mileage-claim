@@ -40,18 +40,18 @@ export default function Approvals({ claims, currentAccId, onStatusChanged }: App
   const handleApprove = useCallback(async (claimId: string) => {
     setProcessingId(claimId);
     try {
-      const approvalId = 'AP' + Math.floor(1000 + Math.random() * 9000);
       const approvalDate = format(new Date(), 'yyyy-MM-dd');
 
-      const approvalRecord: Approval = {
-        approval_id: approvalId,
+      // Omit approval_id to let the Oracle Database Sequence/Trigger generate it
+      const approvalRecord = {
         approval_date: approvalDate,
         approval_status: 'APPROVED',
         claim_id: claimId,
         acc_id: currentAccId
       };
 
-      await DatabaseService.createApproval(approvalRecord);
+      // Cast as Approval to bypass TypeScript errors for the missing ID
+      await DatabaseService.createApproval(approvalRecord as Approval);
       await DatabaseService.updateClaimStatus(claimId, 'APPROVED');
       onStatusChanged();
     } catch (err) {
@@ -65,18 +65,18 @@ export default function Approvals({ claims, currentAccId, onStatusChanged }: App
   const handleReject = useCallback(async (claimId: string) => {
     setProcessingId(claimId);
     try {
-      const approvalId = 'AP' + Math.floor(1000 + Math.random() * 9000);
       const approvalDate = format(new Date(), 'yyyy-MM-dd');
 
-      const approvalRecord: Approval = {
-        approval_id: approvalId,
+      // Omit approval_id to let the Oracle Database Sequence/Trigger generate it
+      const approvalRecord = {
         approval_date: approvalDate,
         approval_status: 'REJECTED',
         claim_id: claimId,
         acc_id: currentAccId
       };
 
-      await DatabaseService.createApproval(approvalRecord);
+      // Cast as Approval to bypass TypeScript errors for the missing ID
+      await DatabaseService.createApproval(approvalRecord as Approval);
       await DatabaseService.updateClaimStatus(claimId, 'REJECTED');
       onStatusChanged();
     } catch (err) {
@@ -95,18 +95,18 @@ export default function Approvals({ claims, currentAccId, onStatusChanged }: App
 
     setProcessingId(claim.claim_id);
     try {
-      const paymentId = 'P' + Math.floor(1000 + Math.random() * 9000);
       const paymentDate = format(new Date(), 'yyyy-MM-dd');
 
-      const paymentRecord: Payment = {
-        payment_id: paymentId,
+      // Omit payment_id to let the Oracle Database Sequence/Trigger generate it
+      const paymentRecord = {
         payment_date: paymentDate,
         payment_amount: claim.total_amount,
         payment_method: 'Bank Transfer',
         approval_id: claim.approval.approval_id
       };
 
-      await DatabaseService.createPayment(paymentRecord);
+      // Cast as Payment to bypass TypeScript errors for the missing ID
+      await DatabaseService.createPayment(paymentRecord as Payment);
       await DatabaseService.updateClaimStatus(claim.claim_id, 'PAID');
       onStatusChanged();
     } catch (err) {
