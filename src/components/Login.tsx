@@ -23,7 +23,6 @@ export default function Login({ onLoginSuccess }: LoginProps) {
       const inputHash = (await hashPassword(password)).toUpperCase();
       let authenticatedUser: UserSession | null = null;
 
-      // 1. Try to find the user in the Staff table first
       const staffMember = await DatabaseService.getStaffByEmail(email);
       
       if (staffMember) {
@@ -40,7 +39,6 @@ export default function Login({ onLoginSuccess }: LoginProps) {
           throw new Error("Incorrect password.");
         }
       } 
-      // 2. If not found in Staff, try the Accountant table
       else {
         const accountant = await DatabaseService.getAccountantByEmail(email);
         
@@ -60,7 +58,6 @@ export default function Login({ onLoginSuccess }: LoginProps) {
         }
       }
 
-      // Final check
       if (authenticatedUser) {
         onLoginSuccess(authenticatedUser);
       } else {
@@ -77,8 +74,6 @@ export default function Login({ onLoginSuccess }: LoginProps) {
 
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col justify-center py-12 sm:px-6 lg:px-8 font-sans relative overflow-hidden">
-      
-      {/* Decorative Background Elements */}
       <div className="absolute top-[-15%] left-[-10%] w-[500px] h-[500px] bg-orange-400/20 rounded-full blur-[100px] pointer-events-none"></div>
       <div className="absolute bottom-[-15%] right-[-10%] w-[500px] h-[500px] bg-red-500/15 rounded-full blur-[100px] pointer-events-none"></div>
 

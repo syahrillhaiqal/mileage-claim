@@ -7,7 +7,7 @@ import { Car, CheckCircle2, Clock, DollarSign, Plus } from 'lucide-react';
 interface DashboardProps {
   userRole: 'STAFF' | 'ACCOUNTANT';
   claims: FullClaim[];
-  currentStaffName : string;
+  currentStaffName: string;
   onAddClaimClick: () => void;
 }
 
@@ -24,7 +24,7 @@ export default function Dashboard({ userRole, claims, currentStaffName, onAddCla
       const month = format(parseISO(c.claim_date), 'MMM yy');
       monthlyDataMap[month] = (monthlyDataMap[month] || 0) + c.total_amount;
     } catch {
-      // Catch exceptions on unexpected non-ISO dates
+      // Catch date errors
     }
   });
 
@@ -33,7 +33,6 @@ export default function Dashboard({ userRole, claims, currentStaffName, onAddCla
     amount: parseFloat(monthlyDataMap[key].toFixed(2))
   }));
 
-  // --- TREND CALCULATION LOGIC ---
   const currentDate = new Date();
   const currentMonthKey = format(currentDate, 'MMM yy');
   
@@ -50,14 +49,11 @@ export default function Dashboard({ userRole, claims, currentStaffName, onAddCla
   if (prevMonthTotal > 0) {
     const percentChange = ((currentMonthTotal - prevMonthTotal) / prevMonthTotal) * 100;
     isTrendUp = percentChange >= 0;
-    // Format to 1 decimal place, add a '+' if it's positive
     trendText = `${isTrendUp ? '+' : ''}${percentChange.toFixed(1)}% from last month`;
   } else if (currentMonthTotal > 0 && prevMonthTotal === 0) {
-    // If they had 0 claims last month but have some this month
     trendText = "+100% from last month"; 
     isTrendUp = true;
   }
-  // -------------------------------
 
   return (
     <div className="flex flex-col h-full space-y-8">
@@ -72,7 +68,7 @@ export default function Dashboard({ userRole, claims, currentStaffName, onAddCla
         {userRole === 'STAFF' && (
           <button 
             onClick={onAddClaimClick}
-            className="bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-3 px-6 rounded-xl shadow-md shadow-indigo-200 flex items-center gap-2 transition-all w-fit"
+            className="bg-gradient-to-r from-orange-500 to-red-600 hover:from-orange-600 hover:to-red-700 text-white font-bold py-3 px-6 rounded-xl shadow-md shadow-orange-500/25 flex items-center gap-2 transition-all w-fit cursor-pointer"
           >
             <Plus className="w-5 h-5" />
             Add Travel Log
@@ -85,7 +81,7 @@ export default function Dashboard({ userRole, claims, currentStaffName, onAddCla
         <KpiCard 
           title="Total Claimed" 
           value={`RM ${totalAmount.toFixed(2)}`} 
-          icon={<DollarSign className="w-6 h-6 text-emerald-600" />} 
+          icon={<DollarSign className="w-6 h-6 text-orange-600" />} 
           trend={trendText}
           trendUp={isTrendUp}
         />
@@ -97,12 +93,12 @@ export default function Dashboard({ userRole, claims, currentStaffName, onAddCla
         <KpiCard 
           title="Approved Claims" 
           value={approvedCount.toString()} 
-          icon={<CheckCircle2 className="w-6 h-6 text-indigo-600" />} 
+          icon={<CheckCircle2 className="w-6 h-6 text-red-600" />} 
         />
         <KpiCard 
           title="Total Trips" 
           value={relevantClaims.reduce((sum, c) => sum + c.trips.length, 0).toString()} 
-          icon={<Car className="w-6 h-6 text-blue-600" />} 
+          icon={<Car className="w-6 h-6 text-slate-700" />} 
         />
       </div>
 
@@ -124,12 +120,12 @@ export default function Dashboard({ userRole, claims, currentStaffName, onAddCla
                     contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
                     formatter={(value: number) => [`RM ${value}`, 'Amount']}
                   />
-                  <Bar dataKey="amount" fill="#4F46E5" radius={[6, 6, 0, 0]} maxBarSize={50} />
+                  <Bar dataKey="amount" fill="#F97316" radius={[6, 6, 0, 0]} maxBarSize={50} />
                 </BarChart>
               </ResponsiveContainer>
             ) : (
               <div className="h-full flex items-center justify-center text-slate-400">
-                No history record is available to graph.
+                No historical records available to display.
               </div>
             )}
           </div>
@@ -149,7 +145,7 @@ export default function Dashboard({ userRole, claims, currentStaffName, onAddCla
                 }`} />
                 <div className="flex-1">
                   <p className="font-bold text-slate-800 text-[13px]">
-                    {userRole === 'ACCOUNTANT' ? `${claim.staff.staff_fname} ${claim.staff.staff_lname}` : `Claim ${claim.claim_id}`}
+                    {userRole === 'ACCOUNTANT' ? `${claim.staff.staff_fname} ${claim.staff.staff_lname}` : `Claim ID: ${claim.claim_id}`}
                   </p>
                   <p className="text-xs text-slate-400">
                     {format(parseISO(claim.claim_date), 'MMM dd, yyyy')}
@@ -160,6 +156,11 @@ export default function Dashboard({ userRole, claims, currentStaffName, onAddCla
                 </div>
               </div>
             ))}
+            {relevantClaims.length === 0 && (
+              <div className="text-center text-slate-400 text-xs py-8">
+                No activity records found.
+              </div>
+            )}
           </div>
         </div>
       </div>

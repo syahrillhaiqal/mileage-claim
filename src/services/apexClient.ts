@@ -52,13 +52,12 @@ export const DatabaseService = {
   // Lookup queries with fallbacks
   getStaffByEmail: async (email: string): Promise<Staff | undefined> => {
     try {
-      // First try standard ORDS JSON query parameters
       const res = await API.get<OrdsResponse<Staff>>(`/staff/?q={"staff_email":"${email}"}`);
       if (res.data?.items && res.data.items.length > 0) {
         return res.data.items[0];
       }
     } catch {
-      // Fallback query if ORDS querying is restricted
+      // Fallback
     }
     const allStaff = await DatabaseService.getStaff();
     return allStaff.find(s => s.staff_email.toLowerCase() === email.toLowerCase());
@@ -92,5 +91,15 @@ export const DatabaseService = {
 
   // Update operations
   updateClaimStatus: (claimId: string, status: MileageClaim['claim_status']) =>
-    API.put(`/mileage_claim/${claimId}`, { claim_status: status }).then(res => res.data)
+    API.put(`/mileage_claim/${claimId}`, { claim_status: status }).then(res => res.data),
+
+  updateMileageClaim: (claimId: string, claim: Partial<MileageClaim>) =>
+    API.put(`/mileage_claim/${claimId}`, claim).then(res => res.data),
+
+  // Delete operations (Support for Enhancement #2)
+  deleteMileageClaim: (claimId: string) =>
+    API.delete(`/mileage_claim/${claimId}`).then(res => res.data),
+
+  deleteTrip: (tripId: number) =>
+    API.delete(`/trip/${tripId}`).then(res => res.data)
 };

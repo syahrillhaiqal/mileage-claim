@@ -5,23 +5,24 @@ import {
   FileCheck2, 
   LogOut, 
   Bell,
-  Loader2
+  Loader2,
+  BarChart3
 } from 'lucide-react';
 import { DatabaseService } from './services/apexClient';
 import type { FullClaim, MileageClaim, Trip, Staff, Approval, Payment, UserSession } from './types';
 import Dashboard from './components/Dashboard';
 import Claims from './components/Claims';
 import Approvals from './components/Approvals';
+import Reports from './components/Reports';
 import Login from './components/Login';
 
 function App() {
   const [session, setSession] = useState<UserSession | null>(() => {
-    // Attempt session recovery from storage
     const cached = sessionStorage.getItem('sl_claims_session');
     return cached ? JSON.parse(cached) : null;
   });
 
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'claims' | 'approvals'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'claims' | 'approvals' | 'reports'>('dashboard');
   const [claims, setClaims] = useState<FullClaim[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
@@ -99,12 +100,10 @@ function App() {
     }
   }, [session]);
 
-  // If no user session is verified, render ONLY the login page to ensure strict protection.
   if (!session) {
     return <Login onLoginSuccess={handleLoginSuccess} />;
   }
 
-  // Generate initials for User avatar
   const initials = session.name
     .split(' ')
     .map(n => n[0])
@@ -140,7 +139,7 @@ function App() {
                 <p className="font-semibold text-slate-700">{session.name}</p>
                 <p className="text-[11px] text-slate-400">{session.positionOrTitle}</p>
               </div>
-              <div className="w-10 h-10 rounded-full bg-indigo-100 border-2 border-white shadow-sm flex items-center justify-center text-indigo-700 font-bold">
+              <div className="w-10 h-10 rounded-full bg-orange-100 border-2 border-white shadow-sm flex items-center justify-center text-orange-700 font-bold">
                 {initials}
               </div>
             </div>
@@ -149,9 +148,9 @@ function App() {
       </header>
 
       <main className="flex flex-1 overflow-hidden">
-        {/* Sidebar */}
-        <aside className="w-64 bg-white border-r border-slate-200 flex flex-col p-4 shrink-0 overflow-y-auto">
-          <nav className="space-y-1 flex-1">
+        {/* Sidebar Navigation */}
+        <aside className="w-64 bg-white border-r border-slate-200 flex flex-col p-4 shrink-0 overflow-y-auto justify-between">
+          <nav className="space-y-1">
             <NavItem 
               icon={<LayoutDashboard className="w-5 h-5" />} 
               label="Dashboard" 
@@ -167,27 +166,36 @@ function App() {
               />
             )}
             {session.role === 'ACCOUNTANT' && (
-              <NavItem 
-                icon={<FileCheck2 className="w-5 h-5" />} 
-                label="Approvals" 
-                isActive={activeTab === 'approvals'} 
-                onClick={() => setActiveTab('approvals')} 
-              />
+              <>
+                <NavItem 
+                  icon={<FileCheck2 className="w-5 h-5" />} 
+                  label="Approvals" 
+                  isActive={activeTab === 'approvals'} 
+                  onClick={() => setActiveTab('approvals')} 
+                />
+                <NavItem 
+                  icon={<BarChart3 className="w-5 h-5" />} 
+                  label="Reports" 
+                  isActive={activeTab === 'reports'} 
+                  onClick={() => setActiveTab('reports')} 
+                />
+              </>
             )}
           </nav>
 
-          <div className="mt-8 bg-slate-900 rounded-2xl p-5 text-white shadow-lg mb-6">
-            <p className="text-slate-400 text-[10px] uppercase tracking-wider mb-2">Logged in as</p>
-            <div className="mb-4">
-              <p className="font-semibold text-sm truncate">{session.name}</p>
-              <p className="text-xs text-indigo-400 font-medium capitalize mt-0.5">{session.role.toLowerCase()}</p>
-            </div>
-            <button 
-              onClick={handleLogout}
-              className="flex items-center justify-center w-full px-4 py-2 bg-slate-800 text-slate-300 hover:bg-rose-600 hover:text-white rounded-xl font-bold transition-all text-xs cursor-pointer"
+          {/* Simple Logout area (Enhancement #1) */}
+          <div className="mt-8 pt-4 border-t border-slate-100">
+            <button
+            onClick={handleLogout}
+            className="flex items-center justify-center w-full px-4 py-3
+                        bg-rose-50 text-rose-600
+                        hover:bg-rose-100 hover:text-rose-700
+                        border border-rose-200
+                        rounded-xl font-semibold transition-all duration-200
+                        cursor-pointer"
             >
-              <LogOut className="w-4 h-4 mr-2" />
-              Logout
+            <LogOut className="w-4 h-4 mr-2" />
+            Logout
             </button>
           </div>
         </aside>
@@ -196,15 +204,15 @@ function App() {
         <section className="flex-1 flex flex-col overflow-x-hidden overflow-y-auto bg-slate-50 relative p-8">
           {isLoading ? (
             <div className="flex flex-col items-center justify-center h-full gap-3">
-              <Loader2 className="w-8 h-8 text-indigo-600 animate-spin" />
-              <p className="text-slate-500 font-medium">Syncing with database records...</p>
+              <Loader2 className="w-8 h-8 text-orange-600 animate-spin" />
+              <p className="text-slate-500 font-medium text-xs">Syncing with database records...</p>
             </div>
           ) : (
             <div className="w-full max-w-7xl mx-auto flex flex-col flex-1 min-h-0">
               {error && (
                 <div className="mb-6 bg-amber-50 border border-amber-200 rounded-2xl p-4 text-amber-800 text-sm flex items-center justify-between">
                   <span>{error}</span>
-                  <button onClick={loadData} className="underline font-semibold hover:text-amber-900">Retry Connection</button>
+                  <button onClick={loadData} className="underline font-semibold hover:text-amber-900 cursor-pointer">Retry Connection</button>
                 </div>
               )}
               {activeTab === 'dashboard' && (
@@ -229,6 +237,11 @@ function App() {
                   onStatusChanged={loadData}
                 />
               )}
+              {activeTab === 'reports' && session.role === 'ACCOUNTANT' && (
+                <Reports 
+                  claims={claims} 
+                />
+              )}
             </div>
           )}
         </section>
@@ -241,13 +254,15 @@ function NavItem({ icon, label, isActive, onClick }: { icon: React.ReactNode, la
   return (
     <button
       onClick={onClick}
-      className={`flex items-center gap-3 w-full px-4 py-3 text-left rounded-xl transition-colors ${
+      className={`flex items-center gap-3 w-full px-4 py-3 text-left rounded-xl transition-all cursor-pointer ${
         isActive 
-          ? 'bg-indigo-50 text-indigo-700 font-semibold' 
-          : 'text-slate-500 hover:bg-slate-50 font-medium'
+          ? 'bg-orange-50 text-orange-600 border border-orange-100 font-bold' 
+          : 'text-slate-500 hover:bg-slate-100/50 hover:text-slate-800 font-medium border border-transparent'
       }`}
     >
-      {icon}
+      <div className={isActive ? 'text-orange-600' : 'text-slate-400'}>
+        {icon}
+      </div>
       <span>{label}</span>
     </button>
   );
