@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import type { FullClaim, MileageClaim, Trip } from '../types';
 import { DatabaseService } from '../services/apexClient';
 import { format, parseISO } from 'date-fns';
@@ -11,6 +11,9 @@ interface ClaimsProps {
   claims: FullClaim[];
   currentStaffId: string;
   onClaimCreated: () => void;
+  mileageRate: number; // Dynamic mileage rate passed down from Settings
+  selectedClaimIdForModal?: string | null;
+  onClearSelectedClaimIdForModal?: () => void;
 }
 
 interface PendingTripForm {
@@ -23,7 +26,14 @@ interface PendingTripForm {
   trip_date: string;
 }
 
-export default function Claims({ claims, currentStaffId, onClaimCreated }: ClaimsProps) {
+export default function Claims({ 
+  claims, 
+  currentStaffId, 
+  onClaimCreated, 
+  mileageRate,
+  selectedClaimIdForModal,
+  onClearSelectedClaimIdForModal
+}: ClaimsProps) {
   const [isCreating, setIsCreating] = useState(false);
   const [editingClaim, setEditingClaim] = useState<FullClaim | null>(null);
   const [claimDate, setClaimDate] = useState(format(new Date(), 'yyyy-MM-dd'));
@@ -42,18 +52,25 @@ export default function Claims({ claims, currentStaffId, onClaimCreated }: Claim
   const [warningMsg, setWarningMsg] = useState<string | null>(null);
   const [activeDetailsClaim, setActiveDetailsClaim] = useState<FullClaim | null>(null);
 
-  const mileageRate = 0.85;
+  // Monitor deep-link notification clicks
+  useEffect(() => {
+    if (selectedClaimIdForModal) {
+      const match = claims.find(c => c.claim_id === selectedClaimIdForModal);
+      if (match) {
+        setActiveDetailsClaim(match);
+      }
+      onClearSelectedClaimIdForModal?.();
+    }
+  }, [selectedClaimIdForModal, claims, onClearSelectedClaimIdForModal]);
 
-  // Safe date-formatting helper to convert Oracle timestamps to yyyy-MM-dd
   const safeDateFormat = (dateStr: string): string => {
     if (!dateStr) return format(new Date(), 'yyyy-MM-dd');
     try {
-      // Handle potential timezone variants and extract local date string
       const parsed = parseISO(dateStr);
       return format(parsed, 'yyyy-MM-dd');
     } catch (err) {
       console.warn("Date parsing error on: ", dateStr, err);
-      return dateStr.substring(0, 10); // Simple fallback substring extraction
+      return dateStr.substring(0, 10);
     }
   };
 
@@ -95,16 +112,13 @@ export default function Claims({ claims, currentStaffId, onClaimCreated }: Claim
     return true;
   };
 
-  // Pre-populates the edit modal correctly
   const handleEditInitiate = (claim: FullClaim) => {
     if (!checkStatusAndProceed(claim, 'EDIT')) return;
     setEditingClaim(claim);
     
-    // Convert claim date to strict HTML5 format
     const formattedClaimDate = safeDateFormat(claim.claim_date);
     setClaimDate(formattedClaimDate);
 
-    // Convert trip dates to strict HTML5 format
     setTrips(claim.trips.map(t => ({
       trip_id: t.trip_id,
       origin: t.origin,
@@ -143,20 +157,16 @@ export default function Claims({ claims, currentStaffId, onClaimCreated }: Claim
     setIsSubmitting(true);
     try {
       if (editingClaim) {
-        // --- EDIT WORKFLOW (Payload Preservation Fix) ---
-        // We must include the existing claim_status and staff_id to prevent ORDS from overwriting them to NULL
         await DatabaseService.updateMileageClaim(editingClaim.claim_id, {
           claim_date: claimDate,
-          claim_status: editingClaim.claim_status, // Preserves state
-          staff_id: editingClaim.staff_id          // Preserves owner mapping
+          claim_status: editingClaim.claim_status,
+          staff_id: editingClaim.staff_id
         });
 
-        // Remove old trips
         for (const oldTrip of editingClaim.trips) {
           await DatabaseService.deleteTrip(oldTrip.trip_id);
         }
 
-        // Add new trips
         for (let i = 0; i < trips.length; i++) {
           const t = trips[i];
           const distNum = parseFloat(t.distance) || 0;
@@ -179,7 +189,6 @@ export default function Claims({ claims, currentStaffId, onClaimCreated }: Claim
         }
         setSuccessMsg(`Mileage claim ${editingClaim.claim_id} has been modified.`);
       } else {
-        // --- CREATE WORKFLOW ---
         const claimPayload = {
           claim_date: claimDate,
           claim_status: 'PENDING',
@@ -238,7 +247,6 @@ export default function Claims({ claims, currentStaffId, onClaimCreated }: Claim
     }
   };
 
-  // Functional Search filter logic
   const filteredClaims = claims.filter(c => {
     const routeSummary = getClaimRoutes(c).toLowerCase();
     const matchesSearch = 
@@ -249,7 +257,6 @@ export default function Claims({ claims, currentStaffId, onClaimCreated }: Claim
     return matchesSearch;
   });
 
-  // Sorting process
   const sortedClaims = [...filteredClaims].sort((a, b) => {
     let comparison = 0;
     if (sortField === 'total_amount') {
@@ -313,17 +320,17 @@ export default function Claims({ claims, currentStaffId, onClaimCreated }: Claim
           <table className="min-w-full divide-y divide-slate-200">
             <thead className="bg-slate-50 sticky top-0 z-10 border-b border-slate-200">
               <tr className="text-slate-400 text-[11px] uppercase tracking-wider">
+                <th scope="col" className="px-6 py-3 text-left font-semibold cursor-pointer" onClick={() => handleSorting('claim_date')}>
+                  <div className="flex items-center gap-1 hover:text-slate-700">
+                    Date <ArrowUpDown className="w-3.5 h-3.5" />
+                  </div>
+                </th>
                 <th scope="col" className="px-6 py-3 text-left font-semibold cursor-pointer" onClick={() => handleSorting('claim_id')}>
                   <div className="flex items-center gap-1 hover:text-slate-700">
                     Claim ID <ArrowUpDown className="w-3.5 h-3.5" />
                   </div>
                 </th>
                 <th scope="col" className="px-6 py-3 text-left font-semibold">Route Traveled</th>
-                <th scope="col" className="px-6 py-3 text-left font-semibold cursor-pointer" onClick={() => handleSorting('claim_date')}>
-                  <div className="flex items-center gap-1 hover:text-slate-700">
-                    Date <ArrowUpDown className="w-3.5 h-3.5" />
-                  </div>
-                </th>
                 <th scope="col" className="px-6 py-3 text-left font-semibold cursor-pointer" onClick={() => handleSorting('total_amount')}>
                   <div className="flex items-center gap-1 hover:text-slate-700">
                     Amount <ArrowUpDown className="w-3.5 h-3.5" />
@@ -342,6 +349,12 @@ export default function Claims({ claims, currentStaffId, onClaimCreated }: Claim
             <tbody className="bg-white divide-y divide-slate-100 text-[13px]">
               {sortedClaims.map((claim) => (
                 <tr key={claim.claim_id} className="hover:bg-slate-50/70 transition-colors">
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <div className="text-sm text-slate-700 flex items-center">
+                      <Calendar className="w-4 h-4 mr-2 text-slate-400" />
+                      {format(parseISO(claim.claim_date), 'MMM dd, yyyy')}
+                    </div>
+                  </td>
                   <td className="px-6 py-4">
                     <div className="flex items-center">
                       <div className="bg-orange-50 p-2 rounded-lg mr-3 border border-orange-100">
@@ -355,12 +368,6 @@ export default function Claims({ claims, currentStaffId, onClaimCreated }: Claim
                   </td>
                   <td className="px-6 py-4 text-slate-600 font-medium truncate max-w-xs">
                     {getClaimRoutes(claim)}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="text-sm text-slate-700 flex items-center">
-                      <Calendar className="w-4 h-4 mr-2 text-slate-400" />
-                      {format(parseISO(claim.claim_date), 'MMM dd, yyyy')}
-                    </div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm font-bold text-slate-900">
                     RM {claim.total_amount.toFixed(2)}

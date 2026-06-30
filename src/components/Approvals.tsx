@@ -188,6 +188,11 @@ export default function Approvals({ claims, currentAccId, onStatusChanged }: App
           <table className="min-w-full divide-y divide-slate-200">
             <thead className="bg-slate-50 sticky top-0 z-10 border-b border-slate-200">
               <tr className="text-slate-400 text-[11px] uppercase tracking-wider">
+                <th scope="col" className="px-6 py-3 text-left font-semibold cursor-pointer" onClick={() => handleSorting('claim_date')}>
+                  <div className="flex items-center gap-1 hover:text-slate-700">
+                    Submission Date <ArrowUpDown className="w-3.5 h-3.5" />
+                  </div>
+                </th>
                 <th scope="col" className="px-6 py-3 text-left font-semibold cursor-pointer" onClick={() => handleSorting('claim_id')}>
                   <div className="flex items-center gap-1 hover:text-slate-700">
                     Claim ID <ArrowUpDown className="w-3.5 h-3.5" />
@@ -196,11 +201,6 @@ export default function Approvals({ claims, currentAccId, onStatusChanged }: App
                 <th scope="col" className="px-6 py-3 text-left font-semibold cursor-pointer" onClick={() => handleSorting('staff_name')}>
                   <div className="flex items-center gap-1 hover:text-slate-700">
                     Employee Name <ArrowUpDown className="w-3.5 h-3.5" />
-                  </div>
-                </th>
-                <th scope="col" className="px-6 py-3 text-left font-semibold cursor-pointer" onClick={() => handleSorting('claim_date')}>
-                  <div className="flex items-center gap-1 hover:text-slate-700">
-                    Submission Date <ArrowUpDown className="w-3.5 h-3.5" />
                   </div>
                 </th>
                 <th scope="col" className="px-6 py-3 text-left font-semibold cursor-pointer" onClick={() => handleSorting('total_amount')}>
@@ -219,6 +219,12 @@ export default function Approvals({ claims, currentAccId, onStatusChanged }: App
             <tbody className="bg-white divide-y divide-slate-100 text-[13px]">
               {sortedClaims.map((claim) => (
                 <tr key={claim.claim_id} className="hover:bg-slate-50/70 transition-colors">
+                  <td className="px-6 py-4 whitespace-nowrap text-slate-600">
+                    <div className="flex items-center text-xs">
+                      <Calendar className="w-4 h-4 mr-1.5 text-slate-400" />
+                      {format(parseISO(claim.claim_date), 'MMM dd, yyyy')}
+                    </div>
+                  </td>
                   <td className="px-6 py-4 whitespace-nowrap font-bold text-slate-900">
                     <div className="flex items-center gap-2">
                       <FileText className="w-4 h-4 text-orange-500" />
@@ -236,12 +242,6 @@ export default function Approvals({ claims, currentAccId, onStatusChanged }: App
                         </div>
                         <div className="text-xs text-slate-400 capitalize">{claim.staff.position}</div>
                       </div>
-                    </div>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-slate-600">
-                    <div className="flex items-center text-xs">
-                      <Calendar className="w-4 h-4 mr-1.5 text-slate-400" />
-                      {format(parseISO(claim.claim_date), 'MMM dd, yyyy')}
                     </div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap font-bold text-slate-900">
@@ -298,7 +298,7 @@ export default function Approvals({ claims, currentAccId, onStatusChanged }: App
               ))}
               {sortedClaims.length === 0 && (
                 <tr>
-                  <td colSpan={6} className="text-center py-12 text-slate-400 font-semibold">
+                  <td colSpan={activeTab === 'ALL' ? 6 : 5} className="text-center py-12 text-slate-400 font-semibold">
                     No claims found in the selected tab category.
                   </td>
                 </tr>

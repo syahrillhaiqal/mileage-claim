@@ -1,23 +1,30 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import type { FullClaim } from '../types';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { format, parseISO } from 'date-fns';
-import { Car, CheckCircle2, Clock, DollarSign, Plus } from 'lucide-react';
+import { Car, CheckCircle2, Clock, DollarSign, Plus, ArrowRight, ShieldAlert } from 'lucide-react';
 
 interface DashboardProps {
-  userRole: 'STAFF' | 'ACCOUNTANT';
   claims: FullClaim[];
   currentStaffName: string;
   onAddClaimClick: () => void;
+  onViewClaim?: (claimId: string) => void;
 }
 
-export default function Dashboard({ userRole, claims, currentStaffName, onAddClaimClick }: DashboardProps) {
+interface NotificationLog {
+  id: string;
+  claimId: string;
+  date: Date;
+  message: string;
+  status: FullClaim['claim_status'];
+}
+
+export default function Dashboard({ claims, currentStaffName, onAddClaimClick, onViewClaim }: DashboardProps) {
   const relevantClaims = claims;
-  
-  const totalAmount = relevantClaims.reduce((sum, c) => sum + c.total_amount, 0);
+
   const pendingCount = relevantClaims.filter(c => c.claim_status === 'PENDING').length;
   const approvedCount = relevantClaims.filter(c => c.claim_status === 'APPROVED' || c.claim_status === 'PAID').length;
-  
+
   const monthlyDataMap: Record<string, number> = {};
   relevantClaims.forEach(c => {
     try {
@@ -35,7 +42,8 @@ export default function Dashboard({ userRole, claims, currentStaffName, onAddCla
 
   const currentDate = new Date();
   const currentMonthKey = format(currentDate, 'MMM yy');
-  
+  const currentMonthLabel = format(currentDate, 'MMMM yyyy');
+
   const prevDate = new Date();
   prevDate.setMonth(prevDate.getMonth() - 1);
   const prevMonthKey = format(prevDate, 'MMM yy');
@@ -55,6 +63,67 @@ export default function Dashboard({ userRole, claims, currentStaffName, onAddCla
     isTrendUp = true;
   }
 
+  // Generate historical timeline logs with simplified message strings
+  const notifications = useMemo(() => {
+    const eventsList: NotificationLog[] = [];
+
+    relevantClaims.forEach((c) => {
+      // 1. Submission Event
+      eventsList.push({
+        id: `${c.claim_id}-submitted`,
+        claimId: c.claim_id,
+        date: parseISO(c.claim_date),
+        message: `Your claim ${c.claim_id} has been submitted.`,
+        status: 'PENDING'
+      });
+
+      // 2. Audit/Decision Event
+      if (c.approval) {
+        const isApproved = c.approval.approval_status === 'APPROVED';
+        eventsList.push({
+          id: `${c.claim_id}-reviewed`,
+          claimId: c.claim_id,
+          date: parseISO(c.approval.approval_date),
+          message: isApproved 
+            ? `Your claim ${c.claim_id} has been approved!`
+            : `Your claim ${c.claim_id} has been rejected.`,
+          status: isApproved ? 'APPROVED' : 'REJECTED'
+        });
+      }
+
+      // 3. Payment Event
+      if (c.payment) {
+        eventsList.push({
+          id: `${c.claim_id}-paid`,
+          claimId: c.claim_id,
+          date: parseISO(c.payment.payment_date),
+          message: `Your claim ${c.claim_id} has been paid.`,
+          status: 'PAID'
+        });
+      }
+    });
+
+    // Sort chronologically descending
+    return eventsList
+      .sort((a, b) => b.date.getTime() - a.date.getTime())
+      .slice(0, 10);
+  }, [relevantClaims]);
+
+  const statusBadgeClasses = (status: FullClaim['claim_status']) => {
+    switch (status) {
+      case 'APPROVED':
+        return 'bg-emerald-50 text-emerald-600 border-emerald-100';
+      case 'PAID':
+        return 'bg-blue-50 text-blue-600 border-blue-100';
+      case 'PENDING':
+        return 'bg-amber-50 text-amber-600 border-amber-100';
+      case 'REJECTED':
+        return 'bg-rose-50 text-rose-600 border-rose-100';
+      default:
+        return 'bg-slate-100 text-slate-600 border-slate-200';
+    }
+  };
+
   return (
     <div className="flex flex-col h-full space-y-8">
       {/* Welcome Title */}
@@ -65,38 +134,36 @@ export default function Dashboard({ userRole, claims, currentStaffName, onAddCla
           </h1>
           <p className="text-slate-500 mt-1">Review and manage travel expenses.</p>
         </div>
-        {userRole === 'STAFF' && (
-          <button 
-            onClick={onAddClaimClick}
-            className="bg-gradient-to-r from-orange-500 to-red-600 hover:from-orange-600 hover:to-red-700 text-white font-bold py-3 px-6 rounded-xl shadow-md shadow-orange-500/25 flex items-center gap-2 transition-all w-fit cursor-pointer"
-          >
-            <Plus className="w-5 h-5" />
-            Add Travel Log
-          </button>
-        )}
+        <button 
+          onClick={onAddClaimClick}
+          className="bg-gradient-to-r from-orange-500 to-red-600 hover:from-orange-600 hover:to-red-700 text-white font-bold py-3 px-6 rounded-xl shadow-md shadow-orange-500/25 flex items-center gap-2 transition-all w-fit cursor-pointer"
+        >
+          <Plus className="w-5 h-5" />
+          Add Travel Log
+        </button>
       </div>
 
       {/* Metric Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 shrink-0">
         <KpiCard 
-          title="Total Claimed" 
-          value={`RM ${totalAmount.toFixed(2)}`} 
+          title={`Total Claimed (${currentMonthLabel})`} 
+          value={`RM ${currentMonthTotal.toFixed(2)}`} 
           icon={<DollarSign className="w-6 h-6 text-orange-600" />} 
           trend={trendText}
           trendUp={isTrendUp}
         />
         <KpiCard 
-          title="Pending Claims" 
+          title="Pending Claims (All-Time)" 
           value={pendingCount.toString()} 
           icon={<Clock className="w-6 h-6 text-amber-600" />} 
         />
         <KpiCard 
-          title="Approved Claims" 
+          title="Approved Claims (All-Time)" 
           value={approvedCount.toString()} 
           icon={<CheckCircle2 className="w-6 h-6 text-red-600" />} 
         />
         <KpiCard 
-          title="Total Trips" 
+          title="Total Trips (All-Time)" 
           value={relevantClaims.reduce((sum, c) => sum + c.trips.length, 0).toString()} 
           icon={<Car className="w-6 h-6 text-slate-700" />} 
         />
@@ -131,34 +198,40 @@ export default function Dashboard({ userRole, claims, currentStaffName, onAddCla
           </div>
         </div>
 
-        {/* Activity Feed */}
+        {/* Dynamic Activity Feed with simplified wording */}
         <div className="bg-white rounded-3xl shadow-sm border border-slate-200 flex flex-col min-h-0">
           <div className="px-6 py-5 border-b border-slate-100">
-            <h3 className="font-bold text-slate-800">Recent Activity</h3>
+            <h3 className="font-bold text-slate-800">Activity Logs</h3>
+            <p className="text-xs text-slate-400 mt-0.5">Click any record to inspect status logs directly</p>
           </div>
-          <div className="p-6 space-y-4 overflow-y-auto flex-1">
-            {relevantClaims.slice(0, 5).map((claim) => (
-              <div key={claim.claim_id} className="flex items-center p-3 hover:bg-slate-50 rounded-lg transition-colors">
-                <div className={`w-2 h-2 rounded-full mr-3 ${
-                  claim.claim_status === 'APPROVED' || claim.claim_status === 'PAID' ? 'bg-emerald-500' :
-                  claim.claim_status === 'PENDING' ? 'bg-amber-500' : 'bg-slate-300'
-                }`} />
-                <div className="flex-1">
-                  <p className="font-bold text-slate-800 text-[13px]">
-                    {userRole === 'ACCOUNTANT' ? `${claim.staff.staff_fname} ${claim.staff.staff_lname}` : `Claim ID: ${claim.claim_id}`}
-                  </p>
-                  <p className="text-xs text-slate-400">
-                    {format(parseISO(claim.claim_date), 'MMM dd, yyyy')}
-                  </p>
+          <div className="p-4 space-y-2 overflow-y-auto flex-1">
+            {notifications.map((notif) => (
+              <div 
+                key={notif.id} 
+                onClick={() => onViewClaim?.(notif.claimId)}
+                className="group flex flex-col p-3 hover:bg-slate-50 border border-transparent hover:border-slate-100 rounded-xl transition-all duration-200 cursor-pointer"
+              >
+                <div className="flex items-start justify-between gap-2 mb-1">
+                  <span className={`px-2 py-0.5 text-[9px] font-bold rounded-full border shrink-0 ${statusBadgeClasses(notif.status)}`}>
+                    {notif.status}
+                  </span>
+                  <span className="text-[10px] text-slate-400 font-medium shrink-0">
+                    {format(notif.date, 'MMM dd, h:mm a')}
+                  </span>
                 </div>
-                <div className="text-sm font-bold text-slate-800">
-                  RM {claim.total_amount.toFixed(2)}
+                <p className="text-xs text-slate-600 font-semibold leading-relaxed group-hover:text-slate-900 transition-colors">
+                  {notif.message}
+                </p>
+                <div className="flex items-center gap-1 mt-1 text-[11px] text-orange-500 font-bold opacity-0 group-hover:opacity-100 transition-opacity">
+                  <span>Audit Logs</span>
+                  <ArrowRight className="w-3.5 h-3.5" />
                 </div>
               </div>
             ))}
-            {relevantClaims.length === 0 && (
-              <div className="text-center text-slate-400 text-xs py-8">
-                No activity records found.
+            {notifications.length === 0 && (
+              <div className="text-center text-slate-400 text-xs py-12 flex flex-col items-center justify-center gap-2">
+                <ShieldAlert className="w-8 h-8 text-slate-300" />
+                <span>No logged events recorded.</span>
               </div>
             )}
           </div>

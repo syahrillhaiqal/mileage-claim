@@ -6,15 +6,17 @@ import {
   LogOut, 
   Bell,
   Loader2,
-  BarChart3
+  BarChart3,
+  Settings as SettingsIcon
 } from 'lucide-react';
 import { DatabaseService } from './services/apexClient';
-import type { FullClaim, MileageClaim, Trip, Staff, Approval, Payment, UserSession } from './types';
+import type { FullClaim, MileageClaim, Trip, Staff, Approval, Payment, UserSession, Department } from './types';
 import Dashboard from './components/Dashboard';
 import Claims from './components/Claims';
 import Approvals from './components/Approvals';
 import Reports from './components/Reports';
 import Login from './components/Login';
+import Settings from './components/Settings';
 
 function App() {
   const [session, setSession] = useState<UserSession | null>(() => {
@@ -22,21 +24,56 @@ function App() {
     return cached ? JSON.parse(cached) : null;
   });
 
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'claims' | 'approvals' | 'reports'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'claims' | 'approvals' | 'reports' | 'settings'>(() => {
+    const cached = sessionStorage.getItem('sl_claims_session');
+    if (cached) {
+      try {
+        const parsedSession: UserSession = JSON.parse(cached);
+        return parsedSession.role === 'ACCOUNTANT' ? 'approvals' : 'dashboard';
+      } catch {
+        return 'dashboard';
+      }
+    }
+    return 'dashboard';
+  });
+
+  // Dynamic state for mileage rate loaded from localStorage
+  const [mileageRate, setMileageRate] = useState<number>(() => {
+    const cachedRate = localStorage.getItem('sl_claims_mileage_rate');
+    return cachedRate ? parseFloat(cachedRate) : 0.85;
+  });
+
+  // State to track direct claim routing from notification clicks
+  const [selectedClaimIdForModal, setSelectedClaimIdForModal] = useState<string | null>(null);
+
   const [claims, setClaims] = useState<FullClaim[]>([]);
+  const [allStaff, setAllStaff] = useState<Staff[]>([]);
+  const [departments, setDepartments] = useState<Department[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
 
   const handleLoginSuccess = (userSession: UserSession) => {
     setSession(userSession);
     sessionStorage.setItem('sl_claims_session', JSON.stringify(userSession));
-    setActiveTab('dashboard');
+    setActiveTab(userSession.role === 'ACCOUNTANT' ? 'reports' : 'dashboard');
   };
 
   const handleLogout = () => {
     setSession(null);
     setClaims([]);
+    setAllStaff([]);
+    setDepartments([]);
     sessionStorage.removeItem('sl_claims_session');
+  };
+
+  const handleMileageRateChange = (newRate: number) => {
+    setMileageRate(newRate);
+    localStorage.setItem('sl_claims_mileage_rate', newRate.toString());
+  };
+
+  const handleViewClaimFromNotification = (claimId: string) => {
+    setSelectedClaimIdForModal(claimId);
+    setActiveTab('claims');
   };
 
   const loadData = async () => {
@@ -49,13 +86,15 @@ function App() {
         tripsData, 
         staffData, 
         approvalsData, 
-        paymentsData
+        paymentsData,
+        departmentsData
       ] = await Promise.all([
         DatabaseService.getMileageClaim(),
         DatabaseService.getTrip(),
         DatabaseService.getStaff(),
         DatabaseService.getApproval(),
-        DatabaseService.getPayment()
+        DatabaseService.getPayment(),
+        DatabaseService.getDepartment()
       ]);
 
       const formattedClaims: FullClaim[] = claimsData.map((claim: MileageClaim) => {
@@ -86,6 +125,8 @@ function App() {
       });
 
       setClaims(formattedClaims);
+      setAllStaff(staffData);
+      setDepartments(departmentsData);
     } catch (err: any) {
       console.error("Failed to load records: ", err);
       setError("An error occurred while communicating with the database. Please reload.");
@@ -129,10 +170,10 @@ function App() {
         
         <div className="flex items-center gap-6">
           <div className="flex gap-4 items-center">
-            <div className="relative">
+            {/* <div className="relative">
               <div className="w-2 h-2 bg-red-500 rounded-full absolute -top-0.5 -right-0.5"></div>
               <Bell className="w-6 h-6 text-slate-400" />
-            </div>
+            </div> */}
             <div className="h-8 w-px bg-slate-200 mx-1"></div>
             <div className="flex items-center gap-3">
               <div className="text-right leading-none hidden sm:block">
@@ -151,19 +192,21 @@ function App() {
         {/* Sidebar Navigation */}
         <aside className="w-64 bg-white border-r border-slate-200 flex flex-col p-4 shrink-0 overflow-y-auto justify-between">
           <nav className="space-y-1">
-            <NavItem 
-              icon={<LayoutDashboard className="w-5 h-5" />} 
-              label="Dashboard" 
-              isActive={activeTab === 'dashboard'} 
-              onClick={() => setActiveTab('dashboard')} 
-            />
             {session.role === 'STAFF' && (
-              <NavItem 
-                icon={<Receipt className="w-5 h-5" />} 
-                label="My Claims" 
-                isActive={activeTab === 'claims'} 
-                onClick={() => setActiveTab('claims')} 
-              />
+              <>
+                <NavItem 
+                  icon={<LayoutDashboard className="w-5 h-5" />} 
+                  label="Dashboard" 
+                  isActive={activeTab === 'dashboard'} 
+                  onClick={() => setActiveTab('dashboard')} 
+                />
+                <NavItem 
+                  icon={<Receipt className="w-5 h-5" />} 
+                  label="My Claims" 
+                  isActive={activeTab === 'claims'} 
+                  onClick={() => setActiveTab('claims')} 
+                />
+              </>
             )}
             {session.role === 'ACCOUNTANT' && (
               <>
@@ -179,23 +222,29 @@ function App() {
                   isActive={activeTab === 'reports'} 
                   onClick={() => setActiveTab('reports')} 
                 />
+                <NavItem 
+                  icon={<SettingsIcon className="w-5 h-5" />} 
+                  label="Settings" 
+                  isActive={activeTab === 'settings'} 
+                  onClick={() => setActiveTab('settings')} 
+                />
               </>
             )}
           </nav>
 
-          {/* Simple Logout area (Enhancement #1) */}
+          {/* Simple Logout area */}
           <div className="mt-8 pt-4 border-t border-slate-100">
             <button
-            onClick={handleLogout}
-            className="flex items-center justify-center w-full px-4 py-3
+              onClick={handleLogout}
+              className="flex items-center justify-center w-full px-4 py-3
                         bg-rose-50 text-rose-600
                         hover:bg-rose-100 hover:text-rose-700
                         border border-rose-200
                         rounded-xl font-semibold transition-all duration-200
                         cursor-pointer"
             >
-            <LogOut className="w-4 h-4 mr-2" />
-            Logout
+              <LogOut className="w-4 h-4 mr-2" />
+              Logout
             </button>
           </div>
         </aside>
@@ -215,12 +264,12 @@ function App() {
                   <button onClick={loadData} className="underline font-semibold hover:text-amber-900 cursor-pointer">Retry Connection</button>
                 </div>
               )}
-              {activeTab === 'dashboard' && (
+              {activeTab === 'dashboard' && session.role === 'STAFF' && (
                 <Dashboard 
-                  userRole={session.role} 
-                  claims={session.role === 'STAFF' ? claims.filter(c => c.staff_id === session.id) : claims} 
+                  claims={claims.filter(c => c.staff_id === session.id)} 
                   currentStaffName={session.name}
                   onAddClaimClick={() => setActiveTab('claims')} 
+                  onViewClaim={handleViewClaimFromNotification}
                 />
               )}
               {activeTab === 'claims' && session.role === 'STAFF' && (
@@ -228,6 +277,9 @@ function App() {
                   claims={claims.filter(c => c.staff_id === session.id)} 
                   currentStaffId={session.id}
                   onClaimCreated={loadData}
+                  mileageRate={mileageRate}
+                  selectedClaimIdForModal={selectedClaimIdForModal}
+                  onClearSelectedClaimIdForModal={() => setSelectedClaimIdForModal(null)}
                 />
               )}
               {activeTab === 'approvals' && session.role === 'ACCOUNTANT' && (
@@ -240,6 +292,16 @@ function App() {
               {activeTab === 'reports' && session.role === 'ACCOUNTANT' && (
                 <Reports 
                   claims={claims} 
+                  departments={departments}
+                  allStaff={allStaff}
+                />
+              )}
+              {activeTab === 'settings' && session.role === 'ACCOUNTANT' && (
+                <Settings 
+                  claims={claims}
+                  allStaff={allStaff}
+                  mileageRate={mileageRate}
+                  onMileageRateChange={handleMileageRateChange}
                 />
               )}
             </div>
