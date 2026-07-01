@@ -55,7 +55,8 @@ function App() {
   const handleLoginSuccess = (userSession: UserSession) => {
     setSession(userSession);
     sessionStorage.setItem('sl_claims_session', JSON.stringify(userSession));
-    setActiveTab(userSession.role === 'ACCOUNTANT' ? 'reports' : 'dashboard');
+    // Requirement #2: Accountant drops into approvals upon login
+    setActiveTab(userSession.role === 'ACCOUNTANT' ? 'approvals' : 'dashboard');
   };
 
   const handleLogout = () => {
@@ -170,10 +171,6 @@ function App() {
         
         <div className="flex items-center gap-6">
           <div className="flex gap-4 items-center">
-            {/* <div className="relative">
-              <div className="w-2 h-2 bg-red-500 rounded-full absolute -top-0.5 -right-0.5"></div>
-              <Bell className="w-6 h-6 text-slate-400" />
-            </div> */}
             <div className="h-8 w-px bg-slate-200 mx-1"></div>
             <div className="flex items-center gap-3">
               <div className="text-right leading-none hidden sm:block">
@@ -232,7 +229,6 @@ function App() {
             )}
           </nav>
 
-          {/* Simple Logout area */}
           <div className="mt-8 pt-4 border-t border-slate-100">
             <button
               onClick={handleLogout}

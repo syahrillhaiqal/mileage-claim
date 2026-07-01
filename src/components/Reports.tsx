@@ -8,7 +8,7 @@ import {
 import { format, parseISO, startOfDay, startOfWeek, startOfMonth, differenceInCalendarDays } from 'date-fns';
 import { 
   Calendar, Search, ArrowUpDown, DollarSign, 
-  TrendingUp, Users, Download, Clock,
+  TrendingUp, Users, Clock,
   Building2, CheckCircle2, Timer
 } from 'lucide-react';
 
@@ -18,7 +18,6 @@ interface ReportsProps {
   allStaff: Staff[];
 }
 
-// Shared color mapping for claim statuses so charts, badges and legends always agree
 const STATUS_COLORS: Record<string, string> = {
   PENDING: '#F59E0B',
   APPROVED: '#10B981',
@@ -29,7 +28,6 @@ const STATUS_COLORS: Record<string, string> = {
 const STATUS_ORDER = ['PENDING', 'APPROVED', 'PAID', 'REJECTED', 'DRAFT'] as const;
 
 export default function Reports({ claims, departments, allStaff }: ReportsProps) {
-  // Only include processed records (PAID / APPROVED / REJECTED) for the trend chart and history table
   const historicalClaims = useMemo(() => {
     return claims.filter(c => c.claim_status === 'PAID' || c.claim_status === 'APPROVED' || c.claim_status === 'REJECTED');
   }, [claims]);
@@ -42,7 +40,6 @@ export default function Reports({ claims, departments, allStaff }: ReportsProps)
   const currentDate = new Date();
   const currentMonthLabel = format(currentDate, 'MMMM yyyy');
 
-  // --- SNAPSHOT KPIs (computed across ALL claims, every status) ---
   const kpis = useMemo(() => {
     const paidOnly = claims.filter(c => c.claim_status === 'PAID');
     const totalPayout = paidOnly.reduce((sum, c) => sum + c.total_amount, 0);
@@ -50,7 +47,6 @@ export default function Reports({ claims, departments, allStaff }: ReportsProps)
     const pendingCount = claims.filter(c => c.claim_status === 'PENDING').length;
     const uniqueClaimants = new Set(claims.map(c => c.staff_id)).size;
 
-    // This month's total claimed amount, across every status, so the figure is explicit about its period
     let currentMonthTotal = 0;
     claims.forEach(c => {
       try {
@@ -62,7 +58,6 @@ export default function Reports({ claims, departments, allStaff }: ReportsProps)
       }
     });
 
-    // Average number of days between a claim's submission date and its approval/rejection date
     const turnaroundSamples: number[] = [];
     claims.forEach(c => {
       if (c.approval?.approval_date && c.claim_date) {
@@ -89,35 +84,48 @@ export default function Reports({ claims, departments, allStaff }: ReportsProps)
     };
   }, [claims, historicalClaims, currentDate]);
 
-  // --- TREND CHART DATA (paid claims only, grouped by selected timeframe) ---
+  // Requirement #1: Fixed Line Graph Chronological Sorting via timestamp extraction
   const trendChartData = useMemo(() => {
     const paidOnly = historicalClaims.filter(c => c.claim_status === 'PAID');
-    const groups: Record<string, number> = {};
+    const groups: Record<number, { dateLabel: string; amount: number; ts: number }> = {};
 
     paidOnly.forEach(claim => {
       try {
         const dateObj = parseISO(claim.claim_date);
         let key = '';
+        let ts = 0;
+        
         if (timeframe === 'daily') {
-          key = format(startOfDay(dateObj), 'yyyy-MM-dd');
+          const start = startOfDay(dateObj);
+          key = format(start, 'yyyy-MM-dd');
+          ts = start.getTime();
         } else if (timeframe === 'weekly') {
-          key = 'Wk ' + format(startOfWeek(dateObj), 'I-yyyy');
+          const start = startOfWeek(dateObj);
+          key = 'Wk ' + format(start, 'I-yyyy');
+          ts = start.getTime();
         } else {
-          key = format(startOfMonth(dateObj), 'MMM yyyy');
+          const start = startOfMonth(dateObj);
+          key = format(start, 'MMM yyyy');
+          ts = start.getTime();
         }
-        groups[key] = (groups[key] || 0) + claim.total_amount;
+
+        if (!groups[ts]) {
+          groups[ts] = { dateLabel: key, amount: 0, ts: ts };
+        }
+        groups[ts].amount += claim.total_amount;
       } catch {
         // Handle unexpected date formats safely
       }
     });
 
-    return Object.entries(groups).map(([date, amount]) => ({
-      date,
-      amount: parseFloat(amount.toFixed(2))
-    })).sort((a, b) => a.date.localeCompare(b.date));
+    return Object.values(groups)
+      .sort((a, b) => a.ts - b.ts) // Guarantee chronological order regardless of string logic
+      .map(item => ({
+        date: item.dateLabel,
+        amount: parseFloat(item.amount.toFixed(2))
+      }));
   }, [historicalClaims, timeframe]);
 
-  // --- STATUS DISTRIBUTION (how many claims sit in each status, across the whole system) ---
   const statusBreakdown = useMemo(() => {
     const counts: Record<string, number> = {};
     claims.forEach(c => { counts[c.claim_status] = (counts[c.claim_status] || 0) + 1; });
@@ -133,7 +141,6 @@ export default function Reports({ claims, departments, allStaff }: ReportsProps)
       }));
   }, [claims]);
 
-  // --- DEPARTMENT BREAKDOWN (how many distinct staff claimed, per department) ---
   const departmentBreakdown = useMemo(() => {
     type DeptAgg = {
       deptName: string;
@@ -189,7 +196,6 @@ export default function Reports({ claims, departments, allStaff }: ReportsProps)
       .sort((a, b) => b.staffClaimed - a.staffClaimed);
   }, [claims, departments, allStaff]);
 
-  // --- TOP CLAIMANTS (staff with the highest total claimed amount) ---
   const topClaimants = useMemo(() => {
     type StaffAgg = { name: string; department: string; totalAmount: number; claimsCount: number };
     const staffMap: Record<string, StaffAgg> = {};
@@ -213,7 +219,6 @@ export default function Reports({ claims, departments, allStaff }: ReportsProps)
       .slice(0, 5);
   }, [claims, departments]);
 
-  // --- Sorting / Searching for the history table ---
   const handleSorting = (field: 'claim_id' | 'claim_date' | 'total_amount' | 'staff_name') => {
     if (sortField === field) {
       setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
@@ -253,23 +258,6 @@ export default function Reports({ claims, departments, allStaff }: ReportsProps)
     });
   }, [filteredClaims, sortField, sortDirection]);
 
-  // CSV report exporter
-  const handleExportCSV = () => {
-    const headers = 'Claim ID,Employee Name,Submission Date,Total Amount,Status\r\n';
-    const rows = sortedClaims.map(c => 
-      `"${c.claim_id}","${c.staff.staff_fname} ${c.staff.staff_lname}","${c.claim_date}",RM ${c.total_amount.toFixed(2)},"${c.claim_status}"`
-    ).join('\r\n');
-    
-    const blob = new Blob([headers + rows], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.setAttribute('download', `sl_mileage_report_${format(new Date(), 'yyyyMMdd')}.csv`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-  };
-
   const statusBadgeClasses = (status: string) => {
     switch (status) {
       case 'APPROVED': return 'bg-emerald-50 text-emerald-600 border-emerald-100';
@@ -282,21 +270,13 @@ export default function Reports({ claims, departments, allStaff }: ReportsProps)
 
   return (
     <div className="flex flex-col h-full space-y-8 text-[14px]">
-      {/* Header */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-end gap-4 shrink-0">
         <div>
           <h1 className="text-3xl font-bold text-slate-900">Reports &amp; Analytics</h1>
           <p className="text-slate-500 mt-1">A complete overview of claim activity, spend, and trends across the company.</p>
         </div>
-        {/* <button 
-          onClick={handleExportCSV}
-          className="flex items-center px-5 py-3 bg-slate-900 hover:bg-slate-800 text-white rounded-xl shadow-md font-bold text-xs transition-all cursor-pointer"
-        >
-          <Download className="w-4 h-4 mr-2" /> Export Processed Claims CSV
-        </button> */}
       </div>
 
-      {/* Snapshot KPI Cards */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4 shrink-0">
         <KpiCard 
           title={`Claimed (${currentMonthLabel})`}
@@ -330,7 +310,6 @@ export default function Reports({ claims, departments, allStaff }: ReportsProps)
         />
       </div>
 
-      {/* Charts Row 1: Trend + Status Distribution */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 shrink-0">
         <div className="lg:col-span-2 bg-white rounded-3xl border border-slate-200 p-6 flex flex-col">
           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
@@ -383,7 +362,6 @@ export default function Reports({ claims, departments, allStaff }: ReportsProps)
           </div>
         </div>
 
-        {/* Status Distribution */}
         <div className="bg-white rounded-3xl border border-slate-200 p-6 flex flex-col">
           <div className="mb-4">
             <h3 className="font-bold text-slate-800 text-base">Claims by Status</h3>
@@ -436,7 +414,6 @@ export default function Reports({ claims, departments, allStaff }: ReportsProps)
         </div>
       </div>
 
-      {/* Charts Row 2: Department Participation + Top Claimants */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 shrink-0">
         <div className="lg:col-span-2 bg-white rounded-3xl border border-slate-200 p-6 flex flex-col">
           <div className="mb-6">
@@ -469,7 +446,6 @@ export default function Reports({ claims, departments, allStaff }: ReportsProps)
           </div>
         </div>
 
-        {/* Top Claimants */}
         <div className="bg-white rounded-3xl border border-slate-200 p-6 flex flex-col">
           <div className="mb-4">
             <h3 className="font-bold text-slate-800 text-base">Top Claimants</h3>
@@ -497,7 +473,6 @@ export default function Reports({ claims, departments, allStaff }: ReportsProps)
         </div>
       </div>
 
-      {/* Department Breakdown Table */}
       <div className="bg-white rounded-3xl shadow-sm border border-slate-200 overflow-hidden shrink-0">
         <div className="p-5 border-b border-slate-100">
           <h3 className="font-bold text-slate-800">Department Breakdown</h3>
@@ -542,7 +517,6 @@ export default function Reports({ claims, departments, allStaff }: ReportsProps)
         </div>
       </div>
 
-      {/* Historical Audit Table (Processed claims are always accessible here) */}
       <div className="bg-white rounded-3xl shadow-sm border border-slate-200 overflow-hidden flex-1 min-h-0 flex flex-col">
         <div className="p-5 border-b border-slate-100 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
           <div>

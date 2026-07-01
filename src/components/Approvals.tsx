@@ -4,7 +4,7 @@ import { DatabaseService } from '../services/apexClient';
 import { format, parseISO } from 'date-fns';
 import { 
   CheckCircle2, XCircle, Search, Calendar, FileText, 
-  ArrowUpDown, User, CreditCard, DollarSign, Filter 
+  ArrowUpDown, DollarSign, Wallet
 } from 'lucide-react';
 
 interface ApprovalsProps {
@@ -13,7 +13,6 @@ interface ApprovalsProps {
   onStatusChanged: () => void;
 }
 
-// hello gay
 type StatusTabType = 'ALL' | 'PENDING' | 'APPROVED' | 'REJECTED' | 'PAID';
 
 export default function Approvals({ claims, currentAccId, onStatusChanged }: ApprovalsProps) {
@@ -21,14 +20,16 @@ export default function Approvals({ claims, currentAccId, onStatusChanged }: App
   const [searchTerm, setSearchTerm] = useState('');
   const [processingId, setProcessingId] = useState<string | null>(null);
   
-  // Sorting configurations
   const [sortField, setSortField] = useState<'claim_id' | 'claim_date' | 'total_amount' | 'staff_name'>('claim_date');
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
 
-  // Modal details view
   const [selectedClaim, setSelectedClaim] = useState<FullClaim | null>(null);
+  
+  // Requirement #3: New states for isolated payment workflow
+  const [paymentModalClaim, setPaymentModalClaim] = useState<FullClaim | null>(null);
+  const [paymentMethod, setPaymentMethod] = useState('BANK TRANSFER');
+  const [paymentRef, setPaymentRef] = useState('');
 
-  // Dynamic counts for each status categorization
   const counts = useMemo(() => {
     return {
       ALL: claims.length,
@@ -39,6 +40,7 @@ export default function Approvals({ claims, currentAccId, onStatusChanged }: App
     };
   }, [claims]);
 
+  // Handle Approve/Reject strictly (No payments tied to it automatically)
   const handleAction = async (claimId: string, action: 'APPROVED' | 'REJECTED') => {
     setProcessingId(claimId);
     try {
@@ -49,30 +51,45 @@ export default function Approvals({ claims, currentAccId, onStatusChanged }: App
         claim_id: claimId,
         acc_id: currentAccId
       };
-      const createdApproval = await DatabaseService.createApproval(approvalPayload);
-
-      if (action === 'APPROVED') {
-        const claimObj = claims.find(c => c.claim_id === claimId);
-        const payoutVal = claimObj ? claimObj.total_amount : 0;
-
-        const paymentPayload: Payment = {
-          payment_id: `PAY-${Date.now().toString().slice(-6)}`,
-          payment_date: format(new Date(), 'yyyy-MM-dd'),
-          payment_amount: payoutVal,
-          payment_method: 'BANK TRANSFER',
-          approval_id: createdApproval.approval_id || approvalPayload.approval_id
-        };
-        await DatabaseService.createPayment(paymentPayload);
-        await DatabaseService.updateClaimStatus(claimId, 'PAID');
-      } else {
-        await DatabaseService.updateClaimStatus(claimId, 'REJECTED');
-      }
-
+      
+      await DatabaseService.createApproval(approvalPayload);
+      await DatabaseService.updateClaimStatus(claimId, action);
+      
       onStatusChanged();
       setSelectedClaim(null);
     } catch (err) {
       console.error(err);
       alert("Error processing the requested approval state update.");
+    } finally {
+      setProcessingId(null);
+    }
+  };
+
+  // Requirement #3: Handle explicitly issuing a payment for an APPROVED claim
+  const handleProcessPayment = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!paymentModalClaim || !paymentModalClaim.approval) return;
+
+    setProcessingId(paymentModalClaim.claim_id);
+    try {
+      const paymentPayload: Payment = {
+        payment_id: paymentRef || `PAY-${Date.now().toString().slice(-6)}`,
+        payment_date: format(new Date(), 'yyyy-MM-dd'),
+        payment_amount: paymentModalClaim.total_amount,
+        payment_method: paymentMethod,
+        approval_id: paymentModalClaim.approval.approval_id
+      };
+
+      await DatabaseService.createPayment(paymentPayload);
+      await DatabaseService.updateClaimStatus(paymentModalClaim.claim_id, 'PAID');
+      
+      onStatusChanged();
+      setPaymentModalClaim(null);
+      setPaymentRef('');
+      setSelectedClaim(null); // Ensure detail view closes if open
+    } catch(err) {
+      console.error(err);
+      alert("Payment processing failed. Ensure database schemas map properly to this procedure.");
     } finally {
       setProcessingId(null);
     }
@@ -87,13 +104,11 @@ export default function Approvals({ claims, currentAccId, onStatusChanged }: App
     }
   };
 
-  // 1. First stage: Filter by active categorization tab selection
   const statusFilteredClaims = useMemo(() => {
     if (activeTab === 'ALL') return claims;
     return claims.filter(c => c.claim_status === activeTab);
   }, [claims, activeTab]);
 
-  // 2. Second stage: Filter by search criteria
   const searchedClaims = useMemo(() => {
     return statusFilteredClaims.filter(c => {
       const fullName = `${c.staff.staff_fname} ${c.staff.staff_lname}`.toLowerCase();
@@ -105,7 +120,6 @@ export default function Approvals({ claims, currentAccId, onStatusChanged }: App
     });
   }, [statusFilteredClaims, searchTerm]);
 
-  // 3. Third stage: Apply sort criteria
   const sortedClaims = useMemo(() => {
     return [...searchedClaims].sort((a, b) => {
       let comparison = 0;
@@ -124,24 +138,21 @@ export default function Approvals({ claims, currentAccId, onStatusChanged }: App
     });
   }, [searchedClaims, sortField, sortDirection]);
 
-  // Tab configurations
   const tabs = [
     { id: 'ALL' as StatusTabType, label: 'All Logs' },
     { id: 'PENDING' as StatusTabType, label: 'Pending Review' },
-    { id: 'APPROVED' as StatusTabType, label: 'Approved' },
+    { id: 'APPROVED' as StatusTabType, label: 'Approved (Awaiting Pay)' },
     { id: 'REJECTED' as StatusTabType, label: 'Rejected' },
     { id: 'PAID' as StatusTabType, label: 'Paid Claim' },
   ];
 
   return (
     <div className="flex flex-col h-full space-y-6 text-[14px]">
-      {/* Title Header */}
       <div className="shrink-0">
         <h1 className="text-3xl font-bold text-slate-900">Approvals Control Center</h1>
         <p className="text-slate-500 mt-1">Audit, categorize, and approve employee travel claims.</p>
       </div>
 
-      {/* Categorized Filter Tabs (New Feature) */}
       <div className="flex flex-wrap gap-2 border-b border-slate-200 pb-px shrink-0">
         {tabs.map((tab) => {
           const tabCount = counts[tab.id];
@@ -167,7 +178,6 @@ export default function Approvals({ claims, currentAccId, onStatusChanged }: App
         })}
       </div>
 
-      {/* Search Input Bar */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 shrink-0">
         <div className="relative w-full sm:w-96">
           <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
@@ -183,7 +193,6 @@ export default function Approvals({ claims, currentAccId, onStatusChanged }: App
         </div>
       </div>
 
-      {/* Main Filtered Records Queue */}
       <div className="bg-white rounded-3xl shadow-sm border border-slate-200 overflow-hidden flex-1 min-h-0 flex flex-col">
         <div className="overflow-y-auto">
           <table className="min-w-full divide-y divide-slate-200">
@@ -270,14 +279,13 @@ export default function Approvals({ claims, currentAccId, onStatusChanged }: App
                         Inspect Logs
                       </button>
                       
-                      {/* Conditional Quick Actions based on status */}
                       {claim.claim_status === 'PENDING' ? (
                         <>
                           <button 
                             disabled={processingId !== null}
                             onClick={() => handleAction(claim.claim_id, 'APPROVED')}
                             className="p-1.5 bg-emerald-50 text-emerald-600 rounded-lg hover:bg-emerald-100 border border-emerald-200 transition-colors disabled:opacity-50 cursor-pointer"
-                            title="Approve and Pay"
+                            title="Approve Claim"
                           >
                             <CheckCircle2 className="w-4 h-4" />
                           </button>
@@ -290,6 +298,15 @@ export default function Approvals({ claims, currentAccId, onStatusChanged }: App
                             <XCircle className="w-4 h-4" />
                           </button>
                         </>
+                      ) : claim.claim_status === 'APPROVED' ? (
+                        <button 
+                          disabled={processingId !== null}
+                          onClick={() => setPaymentModalClaim(claim)}
+                          className="p-1.5 bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-100 border border-blue-200 transition-colors disabled:opacity-50 cursor-pointer"
+                          title="Issue Payment"
+                        >
+                          <DollarSign className="w-4 h-4" />
+                        </button>
                       ) : (
                         <span className="text-xs text-slate-400 font-medium italic px-2">Processed</span>
                       )}
@@ -327,7 +344,6 @@ export default function Approvals({ claims, currentAccId, onStatusChanged }: App
               }`}>{selectedClaim.claim_status}</span>
             </div>
 
-            {/* Travel Line Items */}
             <div className="flex-1 overflow-y-auto space-y-4 mb-6 pr-2">
               {selectedClaim.trips.map((trip, index) => (
                 <div key={trip.trip_id} className="p-4 rounded-xl border border-slate-100 bg-slate-50 text-[13px]">
@@ -359,7 +375,6 @@ export default function Approvals({ claims, currentAccId, onStatusChanged }: App
                 Close Audit
               </button>
               
-              {/* Only show authorization actions if status is PENDING */}
               {selectedClaim.claim_status === 'PENDING' ? (
                 <div className="flex gap-2">
                   <button 
@@ -372,17 +387,108 @@ export default function Approvals({ claims, currentAccId, onStatusChanged }: App
                   <button 
                     disabled={processingId !== null}
                     onClick={() => handleAction(selectedClaim.claim_id, 'APPROVED')}
-                    className="px-5 py-2.5 bg-gradient-to-r from-orange-500 to-red-600 text-white font-bold text-xs rounded-xl hover:opacity-90 shadow-md shadow-orange-500/20 transition-all flex items-center gap-1 cursor-pointer"
+                    className="px-5 py-2.5 bg-gradient-to-r from-emerald-500 to-green-600 text-white font-bold text-xs rounded-xl hover:opacity-90 shadow-md transition-all flex items-center gap-1 cursor-pointer"
                   >
-                    <CheckCircle2 className="w-4 h-4" /> Authorize & Pay
+                    <CheckCircle2 className="w-4 h-4" /> Approve Claim
                   </button>
                 </div>
+              ) : selectedClaim.claim_status === 'APPROVED' ? (
+                 <button 
+                    disabled={processingId !== null}
+                    onClick={() => setPaymentModalClaim(selectedClaim)}
+                    className="px-5 py-2.5 bg-gradient-to-r from-blue-500 to-indigo-600 text-white font-bold text-xs rounded-xl hover:opacity-90 shadow-md transition-all flex items-center gap-1 cursor-pointer"
+                  >
+                    <Wallet className="w-4 h-4" /> Finalize Payment
+                  </button>
               ) : (
                 <div className="text-xs text-slate-400 font-semibold flex items-center italic">
                   Processed record (No actions pending)
                 </div>
               )}
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Requirement #3: Dummy Payment Flow Modal */}
+      {paymentModalClaim && (
+        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4 z-[60]">
+          <div className="bg-white rounded-3xl shadow-xl max-w-md w-full p-6 relative">
+            <div className="flex items-center gap-3 pb-4 mb-5 border-b border-slate-100">
+              <div className="p-2 bg-blue-50 rounded-xl">
+                <Wallet className="w-5 h-5 text-blue-600" />
+              </div>
+              <div>
+                <h3 className="text-base font-bold text-slate-900">Issue Payment</h3>
+                <p className="text-xs text-slate-500">Ref: {paymentModalClaim.claim_id}</p>
+              </div>
+            </div>
+
+            <form onSubmit={handleProcessPayment} className="space-y-5">
+              <div className="bg-slate-50 rounded-xl p-4 border border-slate-100 mb-4">
+                <div className="flex justify-between text-xs mb-1">
+                  <span className="text-slate-500">Beneficiary:</span>
+                  <span className="font-bold text-slate-900">{paymentModalClaim.staff.staff_fname} {paymentModalClaim.staff.staff_lname}</span>
+                </div>
+                <div className="flex justify-between text-xs mb-3">
+                  <span className="text-slate-500">Approved Total:</span>
+                  <span className="font-bold text-emerald-600">RM {paymentModalClaim.total_amount.toFixed(2)}</span>
+                </div>
+                <div className="flex justify-between text-xs items-center border-t border-slate-200 pt-3 mt-3">
+                  <span className="text-slate-500">Approval Ledger Ref:</span>
+                  <span className="font-mono text-slate-700 bg-white px-2 py-0.5 border border-slate-200 rounded">{paymentModalClaim.approval?.approval_id}</span>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-600 uppercase tracking-wider mb-2">
+                  Disbursement Method
+                </label>
+                <select 
+                  value={paymentMethod}
+                  onChange={(e) => setPaymentMethod(e.target.value)}
+                  className="block w-full px-4 py-2.5 bg-white border border-slate-200 rounded-xl text-slate-700 focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 text-sm transition-all"
+                >
+                  <option value="BANK TRANSFER">Bank Transfer</option>
+                  <option value="CHEQUE">Company Cheque</option>
+                  <option value="CASH">Cash </option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-600 uppercase tracking-wider mb-2">
+                  Payment Reference (Optional)
+                </label>
+                <input
+                  type="text"
+                  value={paymentRef}
+                  onChange={(e) => setPaymentRef(e.target.value)}
+                  className="block w-full px-4 py-2.5 bg-white border border-slate-200 rounded-xl text-slate-700 focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 text-sm transition-all placeholder:text-slate-300"
+                  placeholder="e.g. TRF-8392193"
+                />
+              </div>
+
+              <div className="flex justify-end gap-3 pt-3">
+                <button
+                  type="button"
+                  disabled={processingId !== null}
+                  onClick={() => {
+                    setPaymentModalClaim(null);
+                    setPaymentRef('');
+                  }}
+                  className="px-4 py-2 border border-slate-300 text-slate-700 rounded-xl text-xs font-bold hover:bg-slate-50 transition-colors cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={processingId !== null}
+                  className="px-5 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-xl text-xs font-bold hover:opacity-95 shadow-md shadow-blue-500/20 transition-all flex items-center gap-2 cursor-pointer"
+                >
+                  {processingId ? 'Processing...' : 'Disburse Funds'}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

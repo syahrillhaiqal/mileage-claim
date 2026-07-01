@@ -4,14 +4,15 @@ import { DatabaseService } from '../services/apexClient';
 import { format, parseISO } from 'date-fns';
 import { 
   Plus, Search, MapPin, Calendar, FileText, Trash2, 
-  CheckCircle2, ArrowUpDown, Edit, ShieldAlert 
+  CheckCircle2, ArrowUpDown, Edit, ShieldAlert,
+  ArrowRight, Calculator
 } from 'lucide-react';
 
 interface ClaimsProps {
   claims: FullClaim[];
   currentStaffId: string;
   onClaimCreated: () => void;
-  mileageRate: number; // Dynamic mileage rate passed down from Settings
+  mileageRate: number; 
   selectedClaimIdForModal?: string | null;
   onClearSelectedClaimIdForModal?: () => void;
 }
@@ -44,15 +45,12 @@ export default function Claims({
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   
-  // Sorting configurations
   const [sortField, setSortField] = useState<'claim_id' | 'claim_date' | 'total_amount' | 'claim_status'>('claim_date');
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
 
-  // Warnings & Details
   const [warningMsg, setWarningMsg] = useState<string | null>(null);
   const [activeDetailsClaim, setActiveDetailsClaim] = useState<FullClaim | null>(null);
 
-  // Monitor deep-link notification clicks
   useEffect(() => {
     if (selectedClaimIdForModal) {
       const match = claims.find(c => c.claim_id === selectedClaimIdForModal);
@@ -271,7 +269,6 @@ export default function Claims({
 
   return (
     <div className="flex flex-col h-full space-y-8 text-[14px]">
-      {/* Header */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-end gap-4 shrink-0">
         <div className="flex flex-col">
           <h1 className="text-3xl font-bold text-slate-900">My Trip Logs</h1>
@@ -298,7 +295,6 @@ export default function Claims({
         </div>
       )}
 
-      {/* Search Bar */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 shrink-0">
         <div className="relative w-full sm:w-96">
           <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
@@ -314,7 +310,6 @@ export default function Claims({
         </div>
       </div>
 
-      {/* Main Claims Table */}
       <div className="bg-white rounded-3xl shadow-sm border border-slate-200 overflow-hidden flex-1 min-h-0 flex flex-col">
         <div className="overflow-y-auto">
           <table className="min-w-full divide-y divide-slate-200">
@@ -421,7 +416,6 @@ export default function Claims({
         </div>
       </div>
 
-      {/* Claim Detail Modal */}
       {activeDetailsClaim && (
         <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4 z-50">
           <div className="bg-white rounded-3xl shadow-xl max-w-2xl w-full p-8">
@@ -471,7 +465,6 @@ export default function Claims({
         </div>
       )}
 
-      {/* Restrictive Warning Modal */}
       {warningMsg && (
         <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4 z-50">
           <div className="bg-white rounded-3xl shadow-xl max-w-md w-full p-6 text-center">
@@ -490,151 +483,202 @@ export default function Claims({
         </div>
       )}
 
-      {/* Creation & Editing Modal Form */}
+      {/* Requirement #4: Enhanced Create/Edit Modal UI */}
       {isCreating && (
         <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4 z-50 overflow-y-auto">
-          <div className="bg-white rounded-3xl shadow-xl max-w-3xl w-full p-8 max-h-[90vh] flex flex-col my-8">
-            <h2 className="text-xl font-bold text-slate-900 mb-4 shrink-0">
-              {editingClaim ? `Edit Mileage Claim - Reference ${editingClaim.claim_id}` : 'Create New Claim'}
+          <div className="bg-white rounded-3xl shadow-xl max-w-4xl w-full p-8 max-h-[90vh] flex flex-col my-8">
+            <h2 className="text-xl font-bold text-slate-900 mb-1 shrink-0">
+              {editingClaim ? `Edit Mileage Claim - Reference ${editingClaim.claim_id}` : 'Draft New Mileage Claim'}
             </h2>
+            <p className="text-xs text-slate-500 mb-6 shrink-0">Populate the form below detailing each leg of your trip.</p>
             
             <form onSubmit={handleSubmitClaim} className="flex-1 flex flex-col min-h-0">
-              <div className="overflow-y-auto flex-1 pr-2 space-y-6">
-                <div>
-                  <label className="block text-sm font-semibold text-slate-700 mb-1">Claim Submission Date</label>
+              <div className="overflow-y-auto flex-1 pr-3 space-y-6">
+                
+                <div className="bg-slate-50 p-5 rounded-2xl border border-slate-200">
+                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">Bundle Submission Date</label>
                   <input 
                     type="date" 
                     value={claimDate}
                     onChange={(e) => setClaimDate(e.target.value)}
                     required
-                    className="w-full border border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:ring-4 focus:ring-orange-500/10 focus:border-orange-500 focus:outline-none" 
+                    className="w-full sm:w-1/3 border border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:ring-4 focus:ring-orange-500/10 focus:border-orange-500 focus:outline-none transition-all shadow-sm bg-white" 
                   />
+                  <p className="text-[11px] text-slate-400 mt-2">Sets the primary organizational date for this claim file.</p>
                 </div>
                 
                 <div className="space-y-4">
-                  <h3 className="text-sm font-semibold text-slate-800 flex items-center">
-                    <MapPin className="w-4 h-4 mr-2 text-orange-600" /> Trips ({trips.length})
-                  </h3>
+                  <div className="flex items-center justify-between">
+                    <h3 className="text-sm font-bold text-slate-800 flex items-center gap-2 uppercase tracking-wide">
+                      <MapPin className="w-4 h-4 text-orange-600" /> Travel Routing List
+                    </h3>
+                  </div>
 
-                  {trips.map((trip, idx) => (
-                    <div key={idx} className="border border-slate-200 rounded-2xl p-5 bg-slate-50/50 relative">
-                      <div className="flex justify-between items-center mb-4">
-                        <span className="text-xs font-semibold uppercase tracking-wider text-slate-400">Trip Line Item #{idx + 1}</span>
-                        {trips.length > 1 && (
-                          <button 
-                            type="button"
-                            onClick={() => handleRemoveTripFormLine(idx)}
-                            className="text-rose-500 hover:text-rose-700"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
-                        )}
-                      </div>
+                  {trips.map((trip, idx) => {
+                    const distNum = parseFloat(trip.distance) || 0;
+                    const parkNum = parseFloat(trip.parking_fee) || 0;
+                    const tollNum = parseFloat(trip.toll_fee) || 0;
+                    const totalValue = calculateTripAmount(distNum, parkNum, tollNum);
 
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
-                        <div>
-                          <label className="block text-slate-500 mb-1">Date</label>
-                          <input 
-                            type="date"
-                            required
-                            value={trip.trip_date}
-                            onChange={(e) => handleTripInputChange(idx, 'trip_date', e.target.value)}
-                            className="w-full border border-slate-200 rounded-lg px-3 py-2 bg-white focus:ring-2 focus:ring-orange-500 focus:outline-none"
-                          />
+                    return (
+                      <div key={idx} className="border border-slate-200 rounded-2xl overflow-hidden shadow-sm hover:border-slate-300 transition-colors">
+                        <div className="bg-slate-50 px-5 py-3 border-b border-slate-200 flex justify-between items-center">
+                          <span className="text-xs font-bold text-slate-700">Trip Line #{idx + 1}</span>
+                          {trips.length > 1 && (
+                            <button 
+                              type="button"
+                              onClick={() => handleRemoveTripFormLine(idx)}
+                              className="text-rose-500 hover:text-rose-700 bg-rose-50 p-1.5 rounded-lg transition-colors cursor-pointer"
+                              title="Remove Line Item"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          )}
                         </div>
-                        <div>
-                          <label className="block text-slate-500 mb-1">Origin</label>
-                          <input 
-                            type="text" 
-                            required
-                            placeholder="e.g. HQ Office" 
-                            value={trip.origin}
-                            onChange={(e) => handleTripInputChange(idx, 'origin', e.target.value)}
-                            className="w-full border border-slate-200 rounded-lg px-3 py-2 bg-white focus:ring-2 focus:ring-orange-500 focus:outline-none" 
-                          />
-                        </div>
-                        <div>
-                          <label className="block text-slate-500 mb-1">Destination</label>
-                          <input 
-                            type="text" 
-                            required
-                            placeholder="e.g. Client Site" 
-                            value={trip.destination}
-                            onChange={(e) => handleTripInputChange(idx, 'destination', e.target.value)}
-                            className="w-full border border-slate-200 rounded-lg px-3 py-2 bg-white focus:ring-2 focus:ring-orange-500 focus:outline-none" 
-                          />
-                        </div>
-                        <div>
-                          <label className="block text-slate-500 mb-1">Distance (km)</label>
-                          <input 
-                            type="number" 
-                            step="0.1"
-                            required
-                            placeholder="0"
-                            value={trip.distance}
-                            onChange={(e) => handleTripInputChange(idx, 'distance', e.target.value)}
-                            className="w-full border border-slate-200 rounded-lg px-3 py-2 bg-white focus:ring-2 focus:ring-orange-500 focus:outline-none" 
-                          />
-                        </div>
-                        <div>
-                          <label className="block text-slate-500 mb-1">Toll Fee (RM)</label>
-                          <input 
-                            type="number" 
-                            step="0.01"
-                            placeholder="0.00"
-                            value={trip.toll_fee}
-                            onChange={(e) => handleTripInputChange(idx, 'toll_fee', e.target.value)}
-                            className="w-full border border-slate-200 rounded-lg px-3 py-2 bg-white focus:ring-2 focus:ring-orange-500 focus:outline-none" 
-                          />
-                        </div>
-                        <div>
-                          <label className="block text-slate-500 mb-1">Parking Fee (RM)</label>
-                          <input 
-                            type="number" 
-                            step="0.01"
-                            placeholder="0.00"
-                            value={trip.parking_fee}
-                            onChange={(e) => handleTripInputChange(idx, 'parking_fee', e.target.value)}
-                            className="w-full border border-slate-200 rounded-lg px-3 py-2 bg-white focus:ring-2 focus:ring-orange-500 focus:outline-none" 
-                          />
+
+                        <div className="p-5 bg-white flex flex-col gap-5">
+                          {/* Block 1: Date & Route */}
+                          <div className="grid grid-cols-1 md:grid-cols-12 gap-4 items-start">
+                             <div className="md:col-span-3">
+                               <label className="block text-[11px] font-bold text-slate-500 uppercase mb-1">Travel Date</label>
+                               <input 
+                                 type="date"
+                                 required
+                                 value={trip.trip_date}
+                                 onChange={(e) => handleTripInputChange(idx, 'trip_date', e.target.value)}
+                                 className="w-full border border-slate-200 rounded-lg px-3 py-2 focus:ring-2 focus:ring-orange-500 focus:outline-none text-sm bg-slate-50 focus:bg-white"
+                               />
+                             </div>
+                             
+                             <div className="md:col-span-9 flex flex-col sm:flex-row items-center gap-3">
+                               <div className="w-full">
+                                 <label className="block text-[11px] font-bold text-slate-500 uppercase mb-1">Origin Point</label>
+                                 <input 
+                                   type="text" 
+                                   required
+                                   placeholder="e.g. Office HQ" 
+                                   value={trip.origin}
+                                   onChange={(e) => handleTripInputChange(idx, 'origin', e.target.value)}
+                                   className="w-full border border-slate-200 rounded-lg px-3 py-2 focus:ring-2 focus:ring-orange-500 focus:outline-none text-sm bg-slate-50 focus:bg-white" 
+                                 />
+                               </div>
+                               <div className="hidden sm:block mt-5 text-slate-300">
+                                  <ArrowRight className="w-5 h-5" />
+                               </div>
+                               <div className="w-full">
+                                 <label className="block text-[11px] font-bold text-slate-500 uppercase mb-1">Destination</label>
+                                 <input 
+                                   type="text" 
+                                   required
+                                   placeholder="e.g. Client Site B" 
+                                   value={trip.destination}
+                                   onChange={(e) => handleTripInputChange(idx, 'destination', e.target.value)}
+                                   className="w-full border border-slate-200 rounded-lg px-3 py-2 focus:ring-2 focus:ring-orange-500 focus:outline-none text-sm bg-slate-50 focus:bg-white" 
+                                 />
+                               </div>
+                             </div>
+                          </div>
+
+                          {/* Block 2: Financials & Metrics */}
+                          <div className="bg-slate-50/50 p-4 rounded-xl border border-slate-100">
+                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                              <div>
+                                <label className="block text-[11px] font-bold text-slate-500 uppercase mb-1">Distance (km)</label>
+                                <div className="relative">
+                                  <input 
+                                    type="number" 
+                                    step="0.1"
+                                    required
+                                    placeholder="0"
+                                    value={trip.distance}
+                                    onChange={(e) => handleTripInputChange(idx, 'distance', e.target.value)}
+                                    className="w-full pl-3 pr-8 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-orange-500 focus:outline-none text-sm font-semibold text-slate-700" 
+                                  />
+                                  <span className="absolute right-3 top-2 text-xs text-slate-400 font-bold">km</span>
+                                </div>
+                              </div>
+                              <div>
+                                <label className="block text-[11px] font-bold text-slate-500 uppercase mb-1">Toll Expenses</label>
+                                <div className="relative">
+                                  <span className="absolute left-3 top-2 text-xs text-slate-400 font-bold">RM</span>
+                                  <input 
+                                    type="number" 
+                                    step="0.01"
+                                    placeholder="0.00"
+                                    value={trip.toll_fee}
+                                    onChange={(e) => handleTripInputChange(idx, 'toll_fee', e.target.value)}
+                                    className="w-full pl-9 pr-3 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-orange-500 focus:outline-none text-sm font-semibold text-slate-700" 
+                                  />
+                                </div>
+                              </div>
+                              <div>
+                                <label className="block text-[11px] font-bold text-slate-500 uppercase mb-1">Parking Expenses</label>
+                                <div className="relative">
+                                  <span className="absolute left-3 top-2 text-xs text-slate-400 font-bold">RM</span>
+                                  <input 
+                                    type="number" 
+                                    step="0.01"
+                                    placeholder="0.00"
+                                    value={trip.parking_fee}
+                                    onChange={(e) => handleTripInputChange(idx, 'parking_fee', e.target.value)}
+                                    className="w-full pl-9 pr-3 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-orange-500 focus:outline-none text-sm font-semibold text-slate-700" 
+                                  />
+                                </div>
+                              </div>
+                            </div>
+                            
+                            {/* Live calculation ribbon */}
+                            <div className="mt-4 pt-3 border-t border-slate-200 flex flex-col sm:flex-row justify-between items-center text-xs">
+                               <div className="text-slate-400 flex items-center gap-1 font-medium">
+                                 <Calculator className="w-3.5 h-3.5" />
+                                 Calculation: ({distNum}km × RM{mileageRate.toFixed(2)}) + RM{tollNum.toFixed(2)} Toll + RM{parkNum.toFixed(2)} Park
+                               </div>
+                               <div className="font-black text-slate-800 text-sm mt-2 sm:mt-0 bg-white px-3 py-1 rounded border border-slate-200 shadow-sm">
+                                 Line Sum: <span className="text-orange-600 ml-1">RM {totalValue.toFixed(2)}</span>
+                               </div>
+                            </div>
+                          </div>
+
                         </div>
                       </div>
-                      <div className="mt-3 text-right text-xs font-semibold text-slate-600">
-                        Line total: RM {calculateTripAmount(parseFloat(trip.distance) || 0, parseFloat(trip.parking_fee) || 0, parseFloat(trip.toll_fee) || 0).toFixed(2)}
-                      </div>
-                    </div>
-                  ))}
+                    );
+                  })}
 
                   <button 
                     type="button"
                     onClick={handleAddTripFormLine}
-                    className="text-xs text-orange-600 font-bold hover:text-orange-800 flex items-center"
+                    className="w-full py-3.5 border-2 border-dashed border-slate-300 rounded-xl text-sm text-slate-500 font-bold hover:bg-slate-50 hover:text-orange-600 hover:border-orange-200 transition-all flex items-center justify-center gap-2 cursor-pointer"
                   >
-                    <Plus className="w-4 h-4 mr-1" /> Add another trip line item
+                    <Plus className="w-5 h-5" /> Append Another Route
                   </button>
                 </div>
               </div>
 
-              {/* Action Buttons */}
-              <div className="mt-8 flex justify-end space-x-3 shrink-0 pt-4 border-t border-slate-100">
-                <button 
-                  type="button"
-                  disabled={isSubmitting}
-                  onClick={() => {
-                    setIsCreating(false);
-                    setEditingClaim(null);
-                  }}
-                  className="px-5 py-2.5 border border-slate-300 text-slate-700 rounded-xl text-sm font-semibold hover:bg-slate-50 transition-colors cursor-pointer"
-                >
-                  Cancel
-                </button>
-                <button 
-                  type="submit"
-                  disabled={isSubmitting}
-                  className="px-6 py-2.5 bg-gradient-to-r from-orange-500 to-red-600 text-white rounded-xl text-sm font-bold hover:opacity-95 shadow-md shadow-orange-500/20 transition-all flex items-center cursor-pointer"
-                >
-                  {isSubmitting ? 'Processing request...' : editingClaim ? 'Modify Claim Log' : 'Submit Claim'}
-                </button>
+              {/* Submission Tray */}
+              <div className="mt-6 pt-5 border-t border-slate-100 flex justify-between items-center shrink-0">
+                <div className="text-xs text-slate-400 font-medium">
+                  Saving modifications as drafted user: <strong className="text-slate-600">{currentStaffId}</strong>
+                </div>
+                <div className="flex space-x-3">
+                  <button 
+                    type="button"
+                    disabled={isSubmitting}
+                    onClick={() => {
+                      setIsCreating(false);
+                      setEditingClaim(null);
+                    }}
+                    className="px-5 py-2.5 border border-slate-300 text-slate-700 rounded-xl text-sm font-bold hover:bg-slate-50 transition-colors cursor-pointer"
+                  >
+                    Discard Changes
+                  </button>
+                  <button 
+                    type="submit"
+                    disabled={isSubmitting}
+                    className="px-6 py-2.5 bg-gradient-to-r from-orange-500 to-red-600 text-white rounded-xl text-sm font-bold hover:opacity-95 shadow-md shadow-orange-500/20 transition-all flex items-center gap-2 cursor-pointer"
+                  >
+                    {isSubmitting ? 'Processing request...' : editingClaim ? 'Save Changes' : 'Submit Your Claim'}
+                  </button>
+                </div>
               </div>
             </form>
           </div>
