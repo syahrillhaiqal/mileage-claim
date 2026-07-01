@@ -13,6 +13,7 @@ interface ApprovalsProps {
   onStatusChanged: () => void;
 }
 
+// hello gay
 type StatusTabType = 'ALL' | 'PENDING' | 'APPROVED' | 'REJECTED' | 'PAID';
 
 export default function Approvals({ claims, currentAccId, onStatusChanged }: ApprovalsProps) {
